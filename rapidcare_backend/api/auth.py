@@ -1,50 +1,74 @@
-﻿from flask import Blueprint, request, current_app, jsonify
-from werkzeug.security import check_password_hash
-import jwt
-from datetime import datetime, timedelta
-from ..models import create_user, find_user_by_email
+﻿from flask import Blueprint, jsonify, request
+from flask_jwt_extended import create_access_token, jwt_required, current_user
+from ..models import User, UserRole, db
+from .decorators import role_required
 
-bp = Blueprint('auth', __name__)
+bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
 
 @bp.route('/register', methods=['POST'])
 def register():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
     email = (data.get('email') or '').strip().lower()
-    full_name = data.get('full_name') or ''
+    phone = (data.get('phone') or '').strip()
     password = data.get('password') or ''
 
-    if not email or not full_name or not password:
-        return jsonify({'error': 'email, full_name and password are required'}), 400
+    if not name or not email or not phone or not password:
+        return jsonify({'success': False, 'message': 'name, email, phone and password are required'}), 400
 
-    created = create_user(current_app.config['DATABASE'], email, full_name, password)
-    if created:
-        return jsonify({'message': 'user created', 'id': created}), 201
-    return jsonify({'error': 'user could not be created (maybe exists)'}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({'success': False, 'message': 'email already registered'}), 409
+
+    user = User(name=name, email=email, phone=phone, role=UserRole.PATIENT.value)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+
+    token = create_access_token(identity=str(user.id), additional_claims={'role': user.role, 'name': user.name})
+
+    return jsonify({
+        'success': True,
+        'message': 'patient registration successful',
+        'access_token': token,
+        'user': {'id': user.id, 'name': user.name, 'email': user.email, 'role': user.role}
+    }), 201
 
 
 @bp.route('/login', methods=['POST'])
 def login():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     email = (data.get('email') or '').strip().lower()
     password = data.get('password') or ''
 
     if not email or not password:
-        return jsonify({'error': 'email and password are required'}), 400
+        return jsonify({'success': False, 'message': 'email and password are required'}), 400
 
-    user = find_user_by_email(current_app.config['DATABASE'], email)
-    if user is None or not check_password_hash(user['password'], password):
-        return jsonify({'error': 'invalid email or password'}), 401
+    user = User.query.filter_by(email=email).first()
+    if not user or not user.check_password(password):
+        return jsonify({'success': False, 'message': 'invalid email or password'}), 401
 
-    token = jwt.encode(
-        {
-            'user_id': user['id'],
-            'email': user['email'],
-            'role': user['role'],
-            'exp': datetime.utcnow() + timedelta(hours=12)
-        },
-        current_app.config['SECRET_KEY'],
-        algorithm='HS256'
-    )
+    token = create_access_token(identity=str(user.id), additional_claims={'role': user.role, 'name': user.name})
 
-    return jsonify({'message': 'login successful', 'access_token': token, 'user': {'id': user['id'], 'email': user['email'], 'full_name': user['full_name'], 'role': user['role']}})
+    return jsonify({
+        'success': True,
+        'message': 'login successful',
+        'access_token': token,
+        'user': {'id': user.id, 'name': user.name, 'email': user.email, 'role': user.role}
+    }), 200
+
+
+@bp.route('/me', methods=['GET'])
+@jwt_required()
+def me():
+    user = User.query.get(int(current_user.id))
+    if not user:
+        return jsonify({'success': False, 'message': 'user not found'}), 404
+    return jsonify({'success': True, 'user': user.to_public_dict()}), 200
+
+
+@bp.route('/admin-only', methods=['GET'])
+@jwt_required()
+@role_required('admin')
+def admin_only():
+    return jsonify({'success': True, 'message': 'admin access granted'}), 200
