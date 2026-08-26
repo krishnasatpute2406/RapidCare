@@ -1,0 +1,6 @@
+- `[x]` Analyze app structure and models
+- `[x]` Map all routes and navigation triggers from `main.dart` and screen files
+- `[x]` Document feature flows (Patient vs Driver)
+- `[x]` Explain animation and theming systems
+- `[x]` Create `Project_Architecture.artifact.md`
+- `[x]` Verify documentation accuracy
