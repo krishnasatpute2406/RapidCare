@@ -1,103 +1,63 @@
-﻿import sqlite3
-from werkzeug.security import generate_password_hash, check_password_hash
+﻿from __future__ import annotations
+
+import bcrypt
+from datetime import datetime
+from enum import Enum
+
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import CheckConstraint, UniqueConstraint
+from sqlalchemy.orm import validates
 
 
-def get_db_connection(db_path):
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
+db = SQLAlchemy()
 
 
-def init_db(db_path):
-    conn = get_db_connection(db_path)
-    cur = conn.cursor()
+class UserRole(str, Enum):
+    PATIENT = 'patient'
+    DRIVER = 'driver'
+    HOSPITAL = 'hospital'
+    ADMIN = 'admin'
 
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        full_name TEXT NOT NULL,
-        password TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'user',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+class User(db.Model):
+    __tablename__ = 'users'
+    __table_args__ = (
+        UniqueConstraint('email', name='uq_users_email'),
+        CheckConstraint("role IN ('patient', 'driver', 'hospital', 'admin')", name='ck_users_role'),
     )
-    ''')
 
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS hospitals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        address TEXT,
-        phone TEXT,
-        latitude REAL,
-        longitude REAL
-    )
-    ''')
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    phone = db.Column(db.String(30), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.Enum(UserRole, values_callable=lambda x: [r.value for r in UserRole]), nullable=False, default=UserRole.PATIENT.value)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS ambulance_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_name TEXT NOT NULL,
-        pickup_address TEXT NOT NULL,
-        severity TEXT,
-        status TEXT DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    ''')
+    @validates('email')
+    def validate_email(self, key, value):
+        if not value:
+            raise ValueError('Email is required')
+        return value.lower().strip()
 
-    # Seed a sample hospital if table empty
-    cur.execute('SELECT COUNT(1) as c FROM hospitals')
-    row = cur.fetchone()
-    if row and row[0] == 0:
-        cur.execute('INSERT INTO hospitals (name, address, phone, latitude, longitude) VALUES (?, ?, ?, ?, ?)',
-                    ('City General Hospital', '123 Main St', '+1-555-1234', 12.9716, 77.5946))
+    @validates('role')
+    def validate_role(self, key, value):
+        if value not in {role.value for role in UserRole}:
+            raise ValueError(f'Invalid role: {value}')
+        return value
 
-    conn.commit()
-    conn.close()
+    def set_password(self, password: str) -> None:
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
+    def check_password(self, password: str) -> bool:
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
-def create_user(db_path, email, full_name, password, role='user'):
-    conn = get_db_connection(db_path)
-    cur = conn.cursor()
-    hashed = generate_password_hash(password)
-    try:
-        cur.execute('INSERT INTO users (email, full_name, password, role) VALUES (?, ?, ?, ?)',
-                    (email, full_name, hashed, role))
-        conn.commit()
-        user_id = cur.lastrowid
-    except Exception:
-        user_id = None
-    conn.close()
-    return user_id
-
-
-def find_user_by_email(db_path, email):
-    conn = get_db_connection(db_path)
-    user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
-    conn.close()
-    return user
-
-
-def list_hospitals(db_path):
-    conn = get_db_connection(db_path)
-    rows = conn.execute('SELECT * FROM hospitals').fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-def create_ambulance_request(db_path, patient_name, pickup_address, severity):
-    conn = get_db_connection(db_path)
-    cur = conn.cursor()
-    cur.execute('INSERT INTO ambulance_requests (patient_name, pickup_address, severity) VALUES (?, ?, ?)',
-                (patient_name, pickup_address, severity))
-    conn.commit()
-    req_id = cur.lastrowid
-    conn.close()
-    return req_id
-
-
-def list_ambulance_requests(db_path):
-    conn = get_db_connection(db_path)
-    rows = conn.execute('SELECT * FROM ambulance_requests ORDER BY created_at DESC').fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    def to_public_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'email': self.email,
+            'phone': self.phone,
+            'role': self.role,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
