@@ -9,13 +9,10 @@ This service provides the backend API for the Rapidcare mobile application.
 - `POST /register` — create a test user (email, full_name, password)
 - `POST /login` — user authentication (email, password)
 
-Hospitals
-- `GET /hospitals/` — list hospitals
-- `GET /hospitals/<id>` — get hospital details
-
-Ambulance
-- `POST /ambulance/request` — request an ambulance (patient_name, pickup_address, severity)
-- `GET /ambulance/requests` — list ambulance requests (admin/dev)
+Bed allocation
+- `POST /api/hospitals/<hospital_id>/allocate-bed` — allocate a general or ICU bed for the authenticated patient
+	- JSON body: `{"bed_type": "general", "emergency_request_id": "ER-123"}`
+	- Returns `201` for a new allocation, `200` for an idempotent retry, `404` when inventory is missing, or `409` when no bed is available.
 
 ## Quick start
 

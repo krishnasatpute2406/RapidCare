@@ -1,6 +1,0 @@
-- [x] Fix IDE Module Configuration
-    - [x] Update `.idea/modules.xml` to include Android module
-    - [x] Update `rapidcare.iml` to Flutter/Dart type
-    - [x] Cleanup `.idea/gradle.xml` composite build settings
-- [x] Fix `SplashScreen` pending timer (resolved test failure)
-- [x] Verify fix with Gradle Sync

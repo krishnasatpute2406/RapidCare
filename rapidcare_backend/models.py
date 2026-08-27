@@ -61,3 +61,32 @@ class User(db.Model):
             'role': self.role,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class HospitalBedInventory(db.Model):
+    __tablename__ = 'hospital_bed_inventory'
+    __table_args__ = (
+        UniqueConstraint('hospital_id', 'bed_type', name='uq_hospital_bed_type'),
+        CheckConstraint('total_beds >= 0', name='ck_total_beds_non_negative'),
+        CheckConstraint('available_beds >= 0', name='ck_available_beds_non_negative'),
+        CheckConstraint('available_beds <= total_beds', name='ck_available_beds_within_total'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    hospital_id = db.Column(db.Integer, nullable=False, index=True)
+    bed_type = db.Column(db.String(20), nullable=False, default='general')
+    total_beds = db.Column(db.Integer, nullable=False, default=0)
+    available_beds = db.Column(db.Integer, nullable=False, default=0)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BedAllocation(db.Model):
+    __tablename__ = 'bed_allocations'
+
+    id = db.Column(db.Integer, primary_key=True)
+    hospital_id = db.Column(db.Integer, nullable=False, index=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    bed_type = db.Column(db.String(20), nullable=False)
+    emergency_request_id = db.Column(db.String(64), nullable=True, unique=True)
+    status = db.Column(db.String(20), nullable=False, default='allocated')
+    allocated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
