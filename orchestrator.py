@@ -2,10 +2,10 @@
 Multi-Agent Orchestrator for Rapidcare
 
 Agents:
- - Architect (Ollama: llama3.2)
+ - Architect (Google GenAI: gemini-2.5-flash)
  - Coder (Google GenAI: gemini-2.5-flash, Flask and Flutter/Dart phases)
- - Auditor (Ollama: deepseek-coder)
- - Repair (Gemini / Ollama)
+ - Auditor (Ollama: deepseek-coder:6.7b)
+ - Repair (Gemini / Ollama: deepseek-coder:6.7b fallback)
  - Tester (local syntax check)
 """
 
@@ -88,7 +88,7 @@ def init_ai_branch(task_description: str) -> str:
         action = 'Created'
 
     _AI_BRANCH_NAME = branch_name
-    print(f'\n[AI Manager] {action} local safety branch from {_AI_BASE_BRANCH}: {branch_name}')
+    print(f'\n[Manager] {action} local safety branch from {_AI_BASE_BRANCH}: {branch_name}')
     return branch_name
 
 
@@ -97,7 +97,7 @@ def human_approval_gate() -> bool:
     if not _AI_BRANCH_NAME:
         raise RuntimeError('Human approval requires an active AI manager branch.')
 
-    print('\n[AI Manager] Pending changes:')
+    print('\n[Manager] Pending changes:')
     diff = _git('diff', '--stat', check=False)
     print(diff.stdout.strip() or '(No tracked-file diff; untracked files are not included in git diff --stat.)')
     response = input('Do you want to approve and commit these changes? (y/n): ')
@@ -118,7 +118,7 @@ def finalize_ai_changes(task_description: str) -> bool:
     if not approved:
         _git('switch', base_branch)
         _git('branch', '-D', branch_name)
-        print(f'[AI Manager] Changes rejected; deleted {branch_name}.')
+        print(f'[Manager] Changes rejected; deleted {branch_name}.')
         _AI_BRANCH_NAME = None
         _AI_BASE_BRANCH = None
         return False
@@ -130,7 +130,7 @@ def finalize_ai_changes(task_description: str) -> bool:
     _git('switch', base_branch)
     _git('merge', '--no-ff', branch_name, '-m', f'Merge {branch_name}')
     _git('branch', '-d', branch_name)
-    print(f'[AI Manager] Approved changes merged into {base_branch}.')
+    print(f'[Manager] Approved changes merged into {base_branch}.')
     _AI_BRANCH_NAME = None
     _AI_BASE_BRANCH = None
     return True
@@ -227,8 +227,8 @@ def _collect_project_context() -> str:
 
 
 def architect_agent(feature_prompt: str) -> AgentResult:
-    print("\n🤖 [Architect] Generating API blueprint and DB schema...")
-    model = os.getenv("OLLAMA_ARCHITECT_MODEL", "llama3.2")
+    print("\n[Gemini (Architect)] Generating API blueprint and DB schema...")
+    model = os.getenv("GENAI_ARCHITECT_MODEL", "gemini-2.5-flash")
     existing_project_context = _collect_project_context()
 
     prompt = textwrap.dedent(f"""
@@ -262,13 +262,13 @@ def architect_agent(feature_prompt: str) -> AgentResult:
     Return your output strictly as a JSON object with keys 'file_structure', 'api_spec', and 'db_schema'.
     """)
 
-    resp = _safe_call_ollama(model, prompt)
-    print("🤖 [Architect] Blueprint completed.")
+    resp = _safe_call_genai(model, prompt)
+    print("[Gemini (Architect)] Blueprint completed.")
     return AgentResult(success=True, content=resp)
 
 
 def coder_agent(api_and_schema: str) -> AgentResult:
-    print("\n🤖 [Coder] Writing Flask implementation code...")
+    print("\n[Ollama/Gemini (Coder)] Writing Flask implementation code...")
     model = os.getenv("GENAI_CODER_MODEL", "gemini-2.5-flash")
 
     prompt = textwrap.dedent(f"""
@@ -297,12 +297,12 @@ def coder_agent(api_and_schema: str) -> AgentResult:
     """)
 
     resp = _safe_call_genai(model, prompt)
-    print("🤖 [Coder] Code generated.")
+    print("[Ollama/Gemini (Coder)] Code generated.")
     return AgentResult(success=True, content=resp)
 
 
 def frontend_coder_agent(api_and_schema: str) -> AgentResult:
-        print("\n🤖 [Coder] Writing Flutter and Dart frontend code...")
+        print("\n[Ollama/Gemini (Coder)] Writing Flutter and Dart frontend code...")
         model = os.getenv("GENAI_CODER_MODEL", "gemini-2.5-flash")
 
         prompt = textwrap.dedent(f"""
@@ -332,13 +332,13 @@ def frontend_coder_agent(api_and_schema: str) -> AgentResult:
         """)
 
         resp = _safe_call_genai(model, prompt)
-        print("🤖 [Coder] Flutter frontend generated.")
+        print("[Ollama/Gemini (Coder)] Flutter frontend generated.")
         return AgentResult(success=True, content=resp)
 
 
 def auditor_agent(generated_files_json: str) -> AgentResult:
-    print("\n🤖 [Auditor] Auditing backend and Flutter code for security & bugs...")
-    model = os.getenv("OLLAMA_AUDITOR_MODEL", "deepseek-coder")
+    print("\n[DeepSeek-Coder (Security & Bugs)] Auditing backend and Flutter code for security & bugs...")
+    model = os.getenv("OLLAMA_AUDITOR_MODEL", "deepseek-coder:6.7b")
 
     prompt = textwrap.dedent(f"""
     You are the Security Auditor. Review these source files as a production Flask maintainer.
@@ -361,12 +361,12 @@ def auditor_agent(generated_files_json: str) -> AgentResult:
     """)
 
     resp = _safe_call_ollama(model, prompt)
-    print("🤖 [Auditor] Security audit complete.")
+    print("[DeepSeek-Coder (Security & Bugs)] Security audit complete.")
     return AgentResult(success=True, content=resp)
 
 
 def repair_agent(code_json: str, audit_and_errors: str) -> AgentResult:
-    print("\n🤖 [Repair] Patching issues and refactoring code...")
+    print("\n[DeepSeek-Coder (Security & Bugs)] Patching issues and refactoring code...")
     model = os.getenv("REPAIR_MODEL", "gemini-2.5-flash")
 
     prompt = textwrap.dedent(f"""
@@ -391,15 +391,15 @@ def repair_agent(code_json: str, audit_and_errors: str) -> AgentResult:
 
     resp = _safe_call_genai(model, prompt)
     if resp.startswith("GENAI_ERROR"):
-        print("⚠️ Gemini repair failed. Falling back to local Ollama...")
-        resp = _safe_call_ollama("llama3.2", prompt)
+        print("[DeepSeek-Coder (Security & Bugs)] Gemini repair failed. Falling back to local Ollama...")
+        resp = _safe_call_ollama("deepseek-coder:6.7b", prompt)
 
-    print("🤖 [Repair] Code patched.")
+    print("[DeepSeek-Coder (Security & Bugs)] Code patched.")
     return AgentResult(success=True, content=resp)
 
 
 def tester_agent(files: Dict[str, str]) -> Tuple[bool, str]:
-    print("\n🧪 [Tester] Executing Python and Dart structural syntax checks...")
+    print("\n[Local CLI (Structural Validation)] Executing Python and Dart structural syntax checks...")
     temp_dir = Path(tempfile.mkdtemp(prefix="rapidcare_test_"))
     try:
         for filename, content in files.items():
@@ -422,7 +422,7 @@ def tester_agent(files: Dict[str, str]) -> Tuple[bool, str]:
                 text=True,
             )
             if python_proc.returncode != 0:
-                print("🧪 [Tester] Fail - Python syntax errors detected.")
+                print("[Local CLI (Structural Validation)] Fail - Python syntax errors detected.")
                 return False, python_proc.stderr or python_proc.stdout
 
         dart_executable = shutil.which('dart')
@@ -435,10 +435,10 @@ def tester_agent(files: Dict[str, str]) -> Tuple[bool, str]:
                 text=True,
             )
             if dart_proc.returncode != 0:
-                print("🧪 [Tester] Fail - Dart syntax errors detected.")
+                print("[Local CLI (Structural Validation)] Fail - Dart syntax errors detected.")
                 return False, dart_proc.stderr or dart_proc.stdout
 
-        print("🧪 [Tester] Pass - Python and Dart structural syntax checks passed!")
+        print("[Local CLI (Structural Validation)] Pass - Python and Dart structural syntax checks passed!")
         return True, "Python and Dart syntax OK"
     except Exception as exc:
         return False, str(exc)
@@ -472,7 +472,7 @@ def _parse_json_mapping(text: str) -> Dict[str, str]:
 
 
 def manager_loop(feature_request: str, max_retries: int = 3) -> None:
-    print(f"🚀 Starting Multi-Agent Pipeline for Task: '{feature_request}'")
+    print(f"[Manager] Starting Multi-Agent Pipeline for Task: '{feature_request}'")
     init_ai_branch(feature_request)
 
     arch_res = architect_agent(feature_request)
@@ -490,22 +490,22 @@ def manager_loop(feature_request: str, max_retries: int = 3) -> None:
         if success:
             approved = finalize_ai_changes(feature_request)
             if not approved:
-                print("\n❌ [Manager] Changes were rejected; temporary branch was removed.")
+                print("\n[Manager] Changes were rejected; temporary branch was removed.")
                 break
-            print("\n🎉 [Manager] Pipeline completed successfully!")
+            print("\n[Manager] Pipeline completed successfully!")
             print("\nGenerated Code Files:")
             for filename, body in current_files.items():
-                print(f" 📄 {filename} ({len(body)} chars)")
+                print(f"  {filename} ({len(body)} chars)")
             break
 
         attempts += 1
         if attempts > max_retries:
             _rollback_ai_branch()
-            print(f"\n❌ [Manager] Failed after {max_retries} attempts.")
+            print(f"\n[Manager] Failed after {max_retries} attempts.")
             print("Last Error:\n", output)
             break
 
-        print(f"\n🔁 [Manager] Repair attempt {attempts}/{max_retries}...")
+        print(f"\n[Manager] Repair attempt {attempts}/{max_retries}...")
         repair_res = repair_agent(
             json.dumps(current_files),
             json.dumps({"audit_findings": audit_report, "test_error": output})

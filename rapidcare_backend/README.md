@@ -22,11 +22,11 @@ python -m venv .venv
 # Windows
 .venv\Scripts\activate
 pip install -r requirements.txt
-set SECRET_KEY=change-me-in-production
+set JWT_SECRET_KEY=change-me-in-production
 python -m rapidcare_backend.app
 ```
 
 ## Notes
 
-- This is a simple starter service using SQLite for local development.
-- Use a proper production database and secret management in real deployments.
+- The service uses SQLite at `sqlite:///rapidcare.db` for local development.
+- Set `JWT_SECRET_KEY` in the environment before starting the service.
