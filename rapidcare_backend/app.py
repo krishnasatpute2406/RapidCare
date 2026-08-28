@@ -1,7 +1,7 @@
 ﻿import os
 
-from . import create_app
-from .models import db
+from rapidcare_backend import create_app
+from rapidcare_backend.models import db
 
 app = create_app()
 
