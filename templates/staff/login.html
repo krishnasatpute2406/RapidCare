@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RapidCare Staff Portal - Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .brand-gradient {
+      background: linear-gradient(135deg, #064e3b 0%, #0d9488 100%);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 flex flex-col justify-between">
+
+  <!-- TOP BRAND NAV -->
+  <header class="bg-white border-b border-slate-200/80 px-4 sm:px-8 py-3.5 shadow-sm sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+          <i class="fa-solid fa-heart-pulse"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-slate-900 tracking-tight text-lg">RapidCare</span>
+            <span class="bg-teal-50 text-teal-800 text-xs font-bold px-2 py-0.5 rounded-full border border-teal-200">Staff Portal</span>
+          </div>
+          <p class="text-xs text-slate-500 font-medium">Healthcare Operations &amp; Emergency Coordination</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex items-center gap-2 text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+          <i class="fa-solid fa-location-dot text-teal-600"></i>
+          <span>Mumbai Network (Malad &amp; Goregaon)</span>
+        </div>
+        <a href="/" class="text-xs font-semibold text-slate-600 hover:text-teal-700 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="Central Command Center for authorized network administrators">
+          <i class="fa-solid fa-shield-halved text-slate-500"></i>
+          <span>Admin Portal</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 flex items-center justify-center px-4 py-8 sm:py-12">
+    <div class="w-full max-w-md space-y-6">
+
+      <!-- DEMO CONTEXT BANNER -->
+      <div class="bg-amber-50/80 border border-amber-200 text-amber-900 rounded-xl p-3.5 text-xs flex items-start gap-2.5 shadow-sm">
+        <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm mt-0.5"></i>
+        <div>
+          <span class="font-bold">Connected Network:</span>
+          <span class="text-amber-800">Hospital and ambulance records are shared across RapidCare portals and the Flutter app.</span>
+        </div>
+      </div>
+
+      <!-- MAIN SIGN-IN CARD -->
+      <div class="bg-white rounded-2xl shadow-xl border border-slate-200/90 overflow-hidden">
+        
+        <!-- CARD HEADER -->
+        <div class="bg-gradient-to-br from-teal-900 via-teal-800 to-emerald-900 text-white p-6 sm:p-7 text-center relative">
+          <div class="inline-flex items-center gap-2 bg-teal-800/80 border border-teal-700/60 text-teal-200 text-xs font-semibold px-3 py-1 rounded-full mb-3">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Single Entry Staff Gateway</span>
+          </div>
+          <h1 class="text-2xl font-bold tracking-tight text-white">Staff Operations Sign In</h1>
+          <p class="text-xs text-teal-100/80 mt-1 max-w-xs mx-auto">Sign in to your Hospital Operations Console</p>
+        </div>
+
+        <div class="p-6 sm:p-8 space-y-6">
+
+          <div class="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-teal-50 border border-teal-100 text-sm font-bold text-teal-800">
+            <i class="fa-solid fa-hospital text-base"></i>
+            <span>Hospital Staff</span>
+          </div>
+
+          <!-- ROLE DESCRIPTION CARD -->
+          <div id="roleDescriptor" class="bg-teal-50/70 border border-teal-100 rounded-xl p-3.5 flex items-start gap-3">
+            <div id="roleIcon" class="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center text-sm shrink-0 mt-0.5">
+              <i class="fa-solid fa-bed-pulse"></i>
+            </div>
+            <div>
+              <h2 id="roleTitle" class="text-xs font-bold text-teal-900 uppercase tracking-wide">Emergency Department Console</h2>
+              <p id="roleDesc" class="text-xs text-teal-800 mt-0.5">Manage live bed availability, ICU surge capacity, specialist on-duty rosters, and incoming ambulance dispatches.</p>
+            </div>
+          </div>
+
+          <!-- ALERT / ERROR NOTIFICATION -->
+          <div id="alertBox" class="hidden p-3.5 rounded-xl text-xs font-medium border flex items-start gap-2.5" role="alert">
+            <i id="alertIcon" class="fa-solid fa-circle-exclamation text-sm shrink-0 mt-0.5"></i>
+            <span id="alertMessage" class="flex-1"></span>
+          </div>
+
+          <!-- THE AUTHENTICATION FORM -->
+          <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4" novalidate>
+            <div>
+              <label for="usernameInput" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span id="userLabel">Hospital Staff Username</span>
+                <span class="text-slate-400 font-normal lowercase text-[11px]" id="userHelp">e.g. doctor</span>
+              </label>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <i class="fa-solid fa-user-doctor text-sm" id="userIcon"></i>
+                </div>
+                <input 
+                  type="text" 
+                  id="usernameInput" 
+                  required 
+                  autocomplete="username"
+                  placeholder="Enter your username" 
+                  class="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-600 focus:border-teal-600 focus:outline-none transition bg-slate-50/40 focus:bg-white text-slate-800"
+                >
+              </div>
+            </div>
+
+            <div>
+              <label for="passwordInput" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span>Password</span>
+                <button type="button" onclick="togglePassword()" class="text-teal-700 hover:text-teal-800 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-regular fa-eye" id="pwdEye"></i>
+                  <span id="pwdEyeText">Show</span>
+                </button>
+              </label>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <i class="fa-solid fa-lock text-sm"></i>
+                </div>
+                <input 
+                  type="password" 
+                  id="passwordInput" 
+                  required 
+                  autocomplete="current-password"
+                  placeholder="Enter security password" 
+                  class="w-full pl-10 pr-10 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-600 focus:border-teal-600 focus:outline-none transition bg-slate-50/40 focus:bg-white text-slate-800"
+                >
+              </div>
+            </div>
+
+            <!-- SUBMIT BUTTON -->
+            <button 
+              type="submit" 
+              id="submitBtn" 
+              class="w-full bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white font-bold py-3 px-4 rounded-xl text-sm shadow-md transition duration-150 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-wait"
+            >
+              <i class="fa-solid fa-right-to-bracket"></i>
+              <span id="btnText">Sign in to Hospital Console</span>
+            </button>
+          </form>
+
+          {% if demo_password %}
+          <!-- DEMO HELPER PILL -->
+          <div class="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+            <span class="font-medium">Staff sign-in:</span>
+            <div id="demoCredentials" class="font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 text-[11px]">
+              doctor / {{ demo_password|e }}
+            </div>
+          </div>
+          {% endif %}
+
+        </div>
+
+        <!-- CARD FOOTER WITH ISOLATION NOTICE -->
+        <div class="bg-slate-50 border-t border-slate-200/80 px-6 py-3.5 text-center">
+          <p class="text-xs text-slate-500">
+            Role and facility associations are strictly verified by backend server sessions.
+          </p>
+        </div>
+
+      </div>
+
+      <!-- SEPARATE ADMIN ENTRY NOTICE -->
+      <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm text-center space-y-1.5">
+        <p class="text-xs font-semibold text-slate-700">
+          <i class="fa-solid fa-shield-halved text-slate-500 mr-1"></i>
+          Are you a Central Network Administrator?
+        </p>
+        <p class="text-xs text-slate-500 max-w-sm mx-auto">
+          Admin accounts coordinate the entire emergency network and are kept separate from facility staff logins.
+        </p>
+        <a href="/" class="inline-flex items-center gap-1.5 text-xs font-bold text-teal-700 hover:text-teal-900 mt-1 hover:underline">
+          <span>Go to Admin Central Command Center (/)</span>
+          <i class="fa-solid fa-arrow-right text-[10px]"></i>
+        </a>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- PAGE FOOTER -->
+  <footer class="bg-white border-t border-slate-200 py-4 px-4 text-center text-xs text-slate-400">
+    <div class="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="font-semibold text-slate-600">RapidCare</span>
+        <span>&bull;</span>
+        <span>Emergency Healthcare Orchestration</span>
+      </div>
+      <div>Goregaon &amp; Malad Network &bull; Mumbai, Maharashtra</div>
+    </div>
+  </footer>
+
+  <script>
+    const API = location.port === '5000' || location.protocol !== 'file:' ? '' : 'http://127.0.0.1:5000';
+    let currentRole = 'hospital';
+
+    const ROLE_CONFIG = {
+      hospital: {
+        title: 'Emergency Department Console',
+        desc: 'Manage live bed availability, ICU surge capacity, specialist on-duty rosters, and incoming ambulance dispatches.',
+        iconHtml: '<i class="fa-solid fa-bed-pulse"></i>',
+        userLabel: 'Hospital Staff Username',
+        userHelp: 'e.g. doctor',
+        userIconClass: 'fa-solid fa-user-doctor text-sm',
+        btnText: 'Sign in to Hospital Console',
+        targetPortal: '/hospital',
+        storageKey: 'rapidcare_hospital_token',
+        expectedRole: 'Hospital Staff',
+        demoCreds: {{ ('doctor / ' ~ demo_password)|tojson if demo_password else 'null' }}
+      },
+    };
+
+    function $(id) {
+      return document.getElementById(id);
+    }
+
+    function showAlert(message, type = 'error') {
+      const box = $('alertBox');
+      const icon = $('alertIcon');
+      const text = $('alertMessage');
+
+      box.className = 'p-3.5 rounded-xl text-xs font-medium border flex items-start gap-2.5 ' + 
+        (type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' : 
+         type === 'info' ? 'bg-blue-50 border-blue-200 text-blue-800' :
+         'bg-emerald-50 border-emerald-200 text-emerald-800');
+
+      icon.className = type === 'error' ? 'fa-solid fa-circle-exclamation text-rose-600 text-sm shrink-0 mt-0.5' :
+                       type === 'info' ? 'fa-solid fa-circle-info text-blue-600 text-sm shrink-0 mt-0.5' :
+                       'fa-solid fa-circle-check text-emerald-600 text-sm shrink-0 mt-0.5';
+
+      text.textContent = message;
+      box.classList.remove('hidden');
+    }
+
+    function clearAlert() {
+      $('alertBox').classList.add('hidden');
+    }
+
+    function togglePassword() {
+      const pwd = $('passwordInput');
+      const eye = $('pwdEye');
+      const eyeText = $('pwdEyeText');
+      if (pwd.type === 'password') {
+        pwd.type = 'text';
+        eye.className = 'fa-regular fa-eye-slash';
+        eyeText.textContent = 'Hide';
+      } else {
+        pwd.type = 'password';
+        eye.className = 'fa-regular fa-eye';
+        eyeText.textContent = 'Show';
+      }
+    }
+
+    function setRole() {
+      currentRole = 'hospital';
+      clearAlert();
+
+      const conf = ROLE_CONFIG[currentRole];
+
+      // Update role description box
+      $('roleTitle').textContent = conf.title;
+      $('roleDesc').textContent = conf.desc;
+      $('roleIcon').innerHTML = conf.iconHtml;
+
+      // Update form labels and placeholders
+      $('userLabel').textContent = conf.userLabel;
+      $('userHelp').textContent = conf.userHelp;
+      $('userIcon').className = conf.userIconClass;
+      $('btnText').textContent = conf.btnText;
+      if ($('demoCredentials') && conf.demoCreds) {
+        $('demoCredentials').textContent = conf.demoCreds;
+      }
+
+      // This entry page only supports hospital staff.
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      clearAlert();
+
+      const username = $('usernameInput').value.trim();
+      const password = $('passwordInput').value;
+
+      if (!username) {
+        showAlert('Please enter your staff username.');
+        $('usernameInput').focus();
+        return;
+      }
+      if (!password) {
+        showAlert('Please enter your account password.');
+        $('passwordInput').focus();
+        return;
+      }
+
+      const conf = ROLE_CONFIG[currentRole];
+      const submitBtn = $('submitBtn');
+      const btnText = $('btnText');
+
+      submitBtn.disabled = true;
+      btnText.textContent = 'Verifying credentials…';
+
+      try {
+        const response = await fetch(API + '/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Invalid username or password.');
+        }
+
+        // Validate returned role against selected toggle
+        if (data.role !== conf.expectedRole) {
+          if (data.role === 'Admin') {
+            throw new Error('Administrator accounts cannot sign in through the Staff Portal. Please access the Admin Command Center at /.');
+          } else if (data.role === 'Hospital Staff') {
+            throw new Error('This account belongs to Hospital Staff. Use the Hospital Staff sign-in.');
+          } else {
+            throw new Error('This account is not authorized for the selected role.');
+          }
+        }
+
+        if (!data.token) {
+          throw new Error('Login succeeded but the server returned no authorization token.');
+        }
+
+        // Store the role-specific Bearer token
+        localStorage.setItem(conf.storageKey, data.token);
+
+        // Show brief success state and route to portal
+        btnText.textContent = 'Redirecting to ' + currentRole.charAt(0).toUpperCase() + currentRole.slice(1) + ' Console…';
+        showAlert('Signed in successfully! Loading console…', 'success');
+
+        setTimeout(() => {
+          window.location.href = conf.targetPortal;
+        }, 350);
+
+      } catch (err) {
+        showAlert(err.message || 'Unable to connect to the RapidCare server. Please ensure the backend is running.');
+        $('passwordInput').value = '';
+        $('passwordInput').focus();
+      } finally {
+        submitBtn.disabled = false;
+        btnText.textContent = conf.btnText;
+      }
+    }
+
+    // Initialize from URL params or default
+    (function init() {
+      const params = new URLSearchParams(window.location.search);
+      const requestedRole = params.get('role');
+      if (requestedRole === 'admin') {
+        window.location.replace('/');
+        return;
+      }
+      setRole();
+
+      if (requestedRole && requestedRole !== 'hospital') {
+        showAlert('This sign-in page is for hospital staff. Use the Admin Portal for administrator sign-in.');
+      } else if (params.get('expired') === '1') {
+        showAlert('Your previous session has expired. Please sign in again.', 'info');
+      } else if (params.get('logged_out') === '1') {
+        showAlert('You have signed out successfully.', 'info');
+      }
+    })();
+  </script>
+</body>
+</html>

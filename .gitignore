@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+local.properties
+*.jks
+*.keystore
+
+# Backups and local working copies
+work/
+pre-data-sync-*/
+app.pre-*.py
+BACKUP-INFO.txt
+
+# IDE and generated files
+.idea/
+.vscode/
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+coverage/
+.gradle/

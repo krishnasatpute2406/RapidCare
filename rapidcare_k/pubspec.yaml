@@ -1,0 +1,43 @@
+name: rapidcare_k
+description: "A new Flutter project."
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Cupertino icons
+  cupertino_icons: ^1.0.8
+
+  # Opening phone dialer / emergency calls
+  url_launcher: ^6.3.3
+
+  # Google Maps integration
+  google_maps_flutter: ^2.18.2
+
+  # Live GPS location & Geocoding
+  geolocator: ^14.1.1
+  geocoding: ^5.0.0
+
+  # OpenStreetMap and coordinate packages for directory maps
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+  # HTTP package to fetch live OpenStreetMap Overpass API data
+  http: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Flutter lint rules
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

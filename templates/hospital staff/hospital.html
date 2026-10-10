@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Hospital Operations Console - RapidCare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+body{background:#f8fafc;font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif}
+.mono{font-family:'JetBrains Mono',monospace}
+html.theme-dark body{background:#071b27;color:#dce8ef}
+html.theme-dark .bg-white{background-color:#102a39!important}
+html.theme-dark .bg-slate-50,html.theme-dark .bg-slate-50\/50{background-color:#0b2432!important}
+html.theme-dark .bg-slate-100{background-color:#173342!important}
+html.theme-dark .bg-slate-200{background-color:#244252!important}
+html.theme-dark .bg-teal-50{background-color:#123b3c!important}
+html.theme-dark .bg-amber-50{background-color:#40371f!important}
+html.theme-dark .bg-rose-50,html.theme-dark .bg-rose-100{background-color:#442735!important}
+html.theme-dark .text-slate-900,html.theme-dark .text-slate-800,html.theme-dark .text-slate-700{color:#e2edf3!important}
+html.theme-dark .text-slate-600,html.theme-dark .text-slate-500,html.theme-dark .text-slate-400{color:#a7bdc9!important}
+html.theme-dark .text-teal-800,html.theme-dark .text-teal-900{color:#79d5c8!important}
+html.theme-dark .text-amber-800,html.theme-dark .text-amber-900{color:#f2d27c!important}
+html.theme-dark .border-slate-100,html.theme-dark .border-slate-200,html.theme-dark .border-slate-300{border-color:#29485a!important}
+html.theme-dark input,html.theme-dark select,html.theme-dark textarea{background:#0b2230;color:#e2edf3;border-color:#355569}
+html.theme-dark input::placeholder,html.theme-dark textarea::placeholder{color:#8ca6b5}
+html.theme-dark .divide-y>:not([hidden])~:not([hidden]){border-color:#29485a!important}
+.toast{position:fixed;bottom:20px;right:20px;background:#064e3b;color:#fff;padding:12px 18px;border-radius:12px;font-weight:600;font-size:14px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.3);z-index:9999}
+</style>
+</head>
+<body class="p-3 sm:p-5 md:p-6 text-slate-800 min-h-screen">
+
+<!-- SHARED DIRECTORY NOTICE -->
+<div class="max-w-7xl mx-auto mb-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 shadow-sm">
+  <div class="flex items-center gap-2">
+    <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+    <span class="font-bold">Shared RapidCare records:</span>
+    <span class="text-amber-800">Hospital details and location are synchronized with the Admin portal and Flutter app.</span>
+  </div>
+  <a href="/login?role=hospital" class="font-bold text-teal-800 hover:text-teal-950 underline flex items-center gap-1">
+    <span>Staff Entry Portal</span>
+    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+  </a>
+</div>
+
+<div id="portal-status" class="max-w-xl mx-auto bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+  <p id="portal-message" class="text-sm text-slate-600">Checking hospital staff session…</p>
+  <a href="/login" class="inline-block mt-3 text-sm font-bold text-teal-700 hover:underline">Open Staff Sign-In</a>
+</div>
+
+<!-- APP CONSOLE -->
+<div id="app" class="hidden max-w-7xl mx-auto space-y-6">
+
+  <!-- HEADER -->
+  <div class="bg-gradient-to-br from-[#064e3b] via-[#094738] to-[#042f24] text-white rounded-2xl p-5 sm:p-6 shadow-xl border border-teal-900/40 flex flex-col lg:flex-row justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2 text-xs font-bold text-teal-200 bg-[#063327]/80 border border-teal-700/60 px-3 py-1 rounded-full w-fit mb-2.5">
+        <i class="fa-solid fa-heart-pulse text-emerald-400"></i>
+        <span>Hospital Operations Console &bull; Emergency Department</span>
+      </div>
+      <h1 id="hName" class="text-2xl sm:text-3xl font-extrabold tracking-tight">Loading…</h1>
+      <p class="text-teal-100/80 text-xs sm:text-sm mt-1.5 flex flex-wrap items-center gap-3">
+        <span><i class="fa-solid fa-location-dot text-teal-300 mr-1"></i><span id="hLoc"></span></span>
+        <span>&bull;</span>
+        <span><i class="fa-solid fa-phone text-teal-300 mr-1"></i><span id="hPhone"></span></span>
+      </p>
+      <div id="hStat" class="mt-3 font-semibold text-xs flex items-center gap-2"></div>
+    </div>
+    
+    <div class="flex flex-wrap items-center gap-2.5 self-start lg:self-center">
+      <button onclick="logout()" class="bg-teal-900/80 hover:bg-rose-950 text-xs font-bold px-3.5 py-2.5 rounded-xl border border-teal-700/50 hover:border-rose-700/60 shadow-sm transition flex items-center gap-1.5">
+        <i class="fa-solid fa-right-from-bracket text-teal-300"></i>
+        <span>Sign Out</span>
+      </button>
+      <button id="themeBtn" onclick="toggleTheme()" class="bg-teal-900/80 hover:bg-teal-800 text-xs font-medium px-3 py-2.5 rounded-xl border border-teal-700/50 shadow-sm transition flex items-center gap-1.5" title="Switch light or night theme">
+        <i class="fa-solid fa-moon text-teal-300"></i>
+        <span>Night theme</span>
+      </button>
+      <a href="/login" class="bg-white/10 hover:bg-white/20 text-xs font-semibold px-3 py-2.5 rounded-xl border border-white/20 shadow-sm transition flex items-center gap-1.5" title="Return to hospital staff sign-in">
+        <i class="fa-solid fa-arrows-split-up-and-left"></i>
+        <span>Staff Sign-In</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- METRICS CARDS -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+    <!-- GENERAL EMERGENCY BEDS -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+      <div class="flex justify-between items-start text-slate-500 text-xs font-bold uppercase tracking-wider">
+        <span>Available Emergency Beds</span>
+        <span class="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center"><i class="fa-solid fa-bed text-sm"></i></span>
+      </div>
+      <div id="bed" class="text-4xl font-extrabold text-blue-700 my-2.5 mono">–</div>
+      <p class="text-[11px] text-slate-400 mb-3">Update this count to reflect the latest hospital report.</p>
+      <div class="flex gap-2 pt-3 border-t border-slate-100">
+        <button onclick="num('available_beds',-1)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition">&minus; 1 Bed</button>
+        <button onclick="num('available_beds',1)" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition">+ 1 Bed</button>
+        <button onclick="num('available_beds',0,0)" class="ml-auto px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-medium border border-slate-200 transition">Set Full (0)</button>
+      </div>
+    </div>
+
+    <!-- ICU BEDS -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+      <div class="flex justify-between items-start text-slate-500 text-xs font-bold uppercase tracking-wider">
+        <span>Critical Care ICU Beds</span>
+        <span class="w-9 h-9 rounded-xl bg-teal-50 text-teal-800 border border-teal-200 flex items-center justify-center"><i class="fa-solid fa-heart-pulse text-sm"></i></span>
+      </div>
+      <div id="icu" class="text-4xl font-extrabold text-teal-800 my-2.5 mono">–</div>
+      <p class="text-[11px] text-slate-400 mb-3">Ventilator and critical resuscitation readiness</p>
+      <div class="flex gap-2 pt-3 border-t border-slate-100">
+        <button onclick="num('icu_beds',-1)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition">&minus; 1 ICU</button>
+        <button onclick="num('icu_beds',1)" class="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-bold shadow-sm transition">+ 1 ICU</button>
+        <button onclick="num('icu_beds',0,0)" class="ml-auto px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-medium border border-slate-200 transition">Set 0</button>
+      </div>
+    </div>
+
+    <!-- EMERGENCY DEPARTMENT STATUS -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+      <div class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Emergency Department Status</div>
+      <h3 id="ed" class="font-bold text-sm text-slate-900 mb-2"></h3>
+      <div id="edBtns" class="flex gap-1.5 mb-3"></div>
+      <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Specialized Units</div>
+      <div id="units" class="grid grid-cols-2 gap-1.5 text-xs"></div>
+    </div>
+
+  </div>
+
+  <!-- LOWER GRID -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- LEFT COLUMN: EMERGENCIES -->
+    <div class="space-y-6">
+
+      <!-- INCOMING EMERGENCY REQUESTS -->
+      <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200 min-h-[280px]">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+          <h2 class="font-bold text-base text-slate-900 flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+            <i class="fa-solid fa-shield-halved text-rose-600"></i>
+            <span>Incoming Emergency Dispatches (<span id="eCount" class="text-rose-600">0</span>)</span>
+          </h2>
+        </div>
+        <p class="text-xs text-slate-400 mb-4">Live ambulance dispatches routed to this hospital. Updates automatically every 4 seconds.</p>
+        <div id="emerg" class="space-y-3"></div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: SPECIALISTS & FACILITIES -->
+    <div class="space-y-6">
+
+      <!-- ON-DUTY SPECIALISTS -->
+      <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <h2 class="font-bold text-base text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-user-doctor text-teal-700"></i>
+            <span>On-Duty Medical Specialists</span>
+          </h2>
+          <span class="text-[11px] font-semibold bg-teal-50 text-teal-800 px-2.5 py-0.5 rounded-full border border-teal-200">25% Dispatch Weight</span>
+        </div>
+        <p class="text-xs text-slate-400 mb-4">Click to toggle clinicians actively on shift. The dispatch engine uses this to route matched trauma cases.</p>
+        <div id="specs" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <!-- ACTIVE EMERGENCY FACILITIES -->
+      <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200">
+        <h2 class="font-bold text-base text-slate-900 mb-1 flex items-center gap-2">
+          <i class="fa-solid fa-hospital text-blue-700"></i>
+          <span>Operational Diagnostic &amp; Surgical Facilities</span>
+        </h2>
+        <p class="text-xs text-slate-400 mb-4">Live diagnostic availability (Cath lab, CT/MRI, blood bank, trauma bay).</p>
+        <div id="facs" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <!-- MAP LOCATION / GPS -->
+      <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-base text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-location-crosshairs text-teal-700"></i>
+            <span>GIS Map Coordinates</span>
+          </h2>
+          <p id="coords" class="text-xs text-slate-400 mt-0.5">Not set</p>
+          <p class="text-xs text-slate-500 mt-1">Hospital coordinates are managed by Admin.</p>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <section class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200">
+    <h2 class="font-bold text-base text-slate-900 mb-1 flex items-center gap-2"><i class="fa-solid fa-star text-amber-500"></i>Patient Reviews</h2>
+    <p class="text-xs text-slate-500 mb-4">Approved reviews for this hospital. Only Admin can moderate or hide reviews; staff can report a concern.</p>
+    <div id="reviews" class="space-y-3"></div>
+  </section>
+
+</div>
+
+<script>
+const API = location.port === '5000' || location.protocol !== 'file:' ? '' : 'http://127.0.0.1:5000',
+TOKEN_KEY = 'rapidcare_hospital_token',
+EXPIRED = 'Hospital session expired. Please sign in again.',
+UNITS = {cardiac_unit:'Cardiac Unit',trauma_unit:'Trauma Unit',burn_unit:'Burn Unit',maternity_ot:'Maternity OT'},
+SPECS = ['Cardiologist','Trauma Surgeon','Intensivist','Neurosurgeon','Plastic & Burn Surgeon','Obstetrician & Gynecologist','Orthopaedic','Pediatrician','Emergency Physician'],
+FACS = ['24x7 Cath Lab','Level-1 Trauma Bay','Ventilator ICU','Burn Isolation Ward','NICU','CT / MRI','Blood Bank','Emergency OT'],
+EDS = [['OPEN • ACCEPTING PATIENTS','Open','Accepting Emergency Dispatches'],['LIMITED • DIVERSION ADVISED','Limited','Accepting Emergency Dispatches'],['CLOSED • NOT ACCEPTING','Closed','Not Accepting Dispatches']],
+$ = id => document.getElementById(id),
+esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
+toast = m => { let t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2800); },
+beep = () => { try { let a = new AudioContext(), o = a.createOscillator(); o.frequency.value = 880; o.connect(a.destination); o.start(); o.stop(a.currentTime + .25); } catch(e){} };
+
+let H = null, token = null, pollT, saveT, seen = null, loggedIn = false, busy = false, lastSyncError = null;
+try { token = localStorage.getItem(TOKEN_KEY); } catch (e) {}
+
+/* ---------- API / AUTH (Bearer token only; independent of the Flask session cookie) ---------- */
+function authFail(msg) {
+  loggedIn = false; clearInterval(pollT); pollT = null; token = null;
+  try { localStorage.removeItem(TOKEN_KEY); } catch(e) {}
+  // Redirect cleanly to the public staff entry portal
+  window.location.href = '/login?role=hospital' + (msg ? '&expired=1' : '');
+}
+
+async function api(p, m = 'GET', b) {
+  if (!token) { authFail(''); throw Object.assign(Error('Hospital Staff login required'), {auth:true}); }
+  let h = {Authorization: 'Bearer ' + token};
+  if (b) h['Content-Type'] = 'application/json';
+  let r = await fetch(API + p, {method:m, headers:h, body:b ? JSON.stringify(b) : undefined});
+  if (r.status === 401) {
+    let d = {}; try { d = await r.json(); } catch(e) {}
+    authFail(EXPIRED);
+    throw Object.assign(Error(d.message || EXPIRED), {auth:true});
+  }
+  if (!r.ok) { let d = {}; try { d = await r.json(); } catch(e){} throw Error(d.message || 'HTTP ' + r.status); }
+  return r.json();
+}
+
+async function start() {
+  clearInterval(pollT); pollT = null;
+  try {
+    let me = await api('/api/hospital/me');
+    H = me.hospital || me;
+    if (!H?.id) throw Error('Hospital information could not be loaded.');
+    loggedIn = true; seen = null;
+    $('portal-status').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    renderState();
+    await poll(true);
+    if (loggedIn) pollT = setInterval(poll, 4000);
+  } catch(e) {
+    loggedIn = false;
+    $('app').classList.add('hidden');
+    $('portal-message').textContent = e.message || 'Hospital session could not be loaded.';
+    $('portal-status').classList.remove('hidden');
+  }
+}
+
+async function logout() {
+  clearInterval(pollT); pollT = null; clearTimeout(saveT); saveT = null; busy = false;
+  let t = token;
+  if (t) { try { await fetch(API + '/api/auth/logout', {method:'POST', headers:{Authorization:'Bearer ' + t}}); } catch(e){} }
+  token = null;
+  try { localStorage.removeItem(TOKEN_KEY); } catch(e){}
+  H = null; loggedIn = false;
+  window.location.href = '/login?role=hospital&logged_out=1';
+}
+
+window.addEventListener('storage', event => {
+  if (event.key !== TOKEN_KEY) return;
+  if (!event.newValue) {
+    loggedIn = false;
+    clearInterval(pollT); pollT = null;
+    token = null;
+    window.location.href = '/login?role=hospital&logged_out=1';
+    return;
+  }
+  if (event.newValue !== token) {
+    token = event.newValue;
+    start();
+  }
+});
+
+function applyTheme(theme) {
+  const dark = theme === 'dark';
+  document.documentElement.classList.toggle('theme-dark', dark);
+  const button = $('themeBtn');
+  if (button) button.innerHTML = `<i class="fa-solid ${dark ? 'fa-sun' : 'fa-moon'} text-teal-300"></i><span>${dark ? 'Light' : 'Night'} theme</span>`;
+  try { localStorage.setItem('rapidcare_hospital_theme', dark ? 'dark' : 'light'); } catch(e){}
+}
+
+function toggleTheme() {
+  applyTheme(document.documentElement.classList.contains('theme-dark') ? 'light' : 'dark');
+}
+
+/* ---------- LIVE DATA ---------- */
+async function poll(force) {
+  if (!loggedIn) return;
+  try {
+    let [s, em, reviews] = await Promise.all([api('/api/hospital/state'), api('/api/hospital/emergencies'), api('/api/hospital/reviews')]);
+    if (!loggedIn) return;
+    lastSyncError = null;
+    if (force || (!busy && !saveT)) { H = s; renderState(); }
+    renderEmerg(em);
+    renderReviews(reviews);
+  } catch(e) {
+    if (!e.auth) {
+      console.error('Sync failed', e);
+      if (e.message !== lastSyncError) toast('Hospital sync failed: ' + e.message);
+      lastSyncError = e.message;
+    }
+  }
+}
+
+function renderReviews(list) {
+  $('reviews').innerHTML = list.length ? list.map(r => `<article class="border border-slate-200 rounded-xl p-4 bg-slate-50/70"><div class="flex items-center justify-between gap-3"><strong class="text-amber-600">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</strong><span class="text-[11px] text-slate-400">${esc((r.submitted_at||'').slice(0,10))}</span></div><p class="text-sm text-slate-700 mt-2 whitespace-pre-wrap">${esc(r.comment||'Rating only')}</p><button onclick="reportReview(${r.id})" class="mt-3 text-xs font-semibold text-rose-700 hover:underline">Report to Admin</button></article>`).join('') : '<p class="text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl p-4 text-center">No approved reviews yet.</p>';
+}
+
+async function reportReview(id) {
+  const reason = prompt('Tell Admin why this review should be checked:');
+  if (!reason || !reason.trim()) return;
+  try { await api('/api/hospital/reviews/' + id + '/report', 'POST', {reason: reason.trim()}); toast('Report sent to Admin'); }
+  catch (e) { toast('Could not report review: ' + e.message); }
+}
+
+function renderState() {
+  if (!H) return;
+  $('hName').textContent = H.name || 'Hospital';
+  $('hLoc').textContent = H.location || '—';
+  $('hPhone').textContent = H.phone || '—';
+  $('bed').textContent = H.available_beds ?? 0;
+  $('icu').textContent = H.icu_beds ?? 0;
+  $('hStat').innerHTML = H.active
+    ? `<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span><span class="text-emerald-300">Operational Status: ${esc(H.status)}</span>`
+    : `<span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span><span class="text-rose-300">Deactivated by Admin: not receiving dispatches</span>`;
+  $('ed').textContent = H.ed_status || EDS[0][0];
+  $('edBtns').innerHTML = EDS.map(([v,l], i) => `<button onclick="setEd(${i})" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${H.ed_status === v ? 'bg-teal-700 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">${l}</button>`).join('');
+  $('units').innerHTML = Object.entries(UNITS).map(([k,l]) => `<div class="flex items-center justify-between bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100"><span class="text-slate-600 text-[11px] font-medium">${l}</span><button onclick="tog('units','${k}')" class="font-bold px-2 py-0.5 rounded text-[11px] transition ${H.units?.[k] ? 'text-teal-900 bg-teal-100' : 'text-slate-400 bg-slate-200'}">${H.units?.[k] ? 'ON' : 'OFF'}</button></div>`).join('');
+  
+  const pills = (arr, g, on) => arr.map((n, i) => H[g]?.[n]
+    ? `<button onclick="tog('${g}',${i})" class="px-3 py-1.5 rounded-lg text-xs font-bold ${on} text-white shadow-sm transition flex items-center gap-1.5"><i class="fa-solid fa-check text-[10px]"></i> ${esc(n)}</button>`
+    : `<button onclick="tog('${g}',${i})" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 transition">+ ${esc(n)}</button>`).join('');
+  
+  $('specs').innerHTML = pills(SPECS, 'specialists', 'bg-teal-700');
+  $('facs').innerHTML = pills(FACS, 'facilities', 'bg-slate-800');
+  $('coords').textContent = H.lat != null && H.lng != null
+    ? `${(+H.lat).toFixed(4)}°N, ${(+H.lng).toFixed(4)}°E`
+    : 'Not set: hospital coordinates missing from GIS map';
+}
+
+/* ---------- HOSPITAL STATE ---------- */
+function edit() {
+  busy = true; renderState(); clearTimeout(saveT); saveT = setTimeout(save, 300);
+}
+async function save() {
+  try {
+    await api('/api/hospital/state', 'POST', {
+      available_beds: H.available_beds, icu_beds: H.icu_beds,
+      ed_status: H.ed_status, status: H.status, units: H.units,
+      specialists: H.specialists, facilities: H.facilities
+    });
+  } catch(e) {
+    toast('Could not save: ' + e.message);
+  }
+  saveT = null; busy = false; poll(true);
+}
+function num(k, d, abs) { H[k] = Math.max(0, abs ?? H[k] + d); edit(); }
+function tog(g, k) {
+  let key = g === 'units' ? k : (g === 'specialists' ? SPECS : FACS)[k];
+  H[g][key] = !H[g][key]; edit();
+}
+function setEd(i) { H.ed_status = EDS[i][0]; if (H.active) H.status = EDS[i][2]; edit(); }
+
+/* ---------- EMERGENCIES ---------- */
+const stCls = s => ({incoming:'bg-rose-100 text-rose-800 border-rose-200',accepted:'bg-amber-100 text-amber-800 border-amber-200',en_route:'bg-amber-100 text-amber-800 border-amber-200',arrived:'bg-blue-100 text-blue-800 border-blue-200',picked_up:'bg-blue-100 text-blue-800 border-blue-200'}[s] || 'bg-slate-100 text-slate-700 border-slate-200');
+
+function renderEmerg(list) {
+  $('eCount').textContent = list.length;
+  let ids = new Set(list.map(e => e.id));
+  if (seen) list.filter(e => !seen.has(e.id)).forEach(e => { toast(`New emergency ${e.code}: ${e.emergency_type}`); beep(); });
+  seen = ids;
+  $('emerg').innerHTML = list.length ? list.map(e => `
+  <div class="border border-slate-200 rounded-xl p-4 bg-slate-50/70 space-y-2.5">
+    <div class="flex items-center justify-between">
+      <span class="font-bold text-slate-900 mono">${esc(e.code)}</span>
+      <span class="flex gap-1.5">
+        <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200 uppercase">${esc(e.triage_level)}</span>
+        <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${stCls(e.status)} uppercase">${esc((e.status||'').replace('_',' '))}</span>
+      </span>
+    </div>
+    <p class="text-sm text-slate-800">
+      <span class="font-bold">${esc(e.patient_name)}</span> ${e.patient_phone ? '<span class="text-slate-500 font-mono text-xs">· ' + esc(e.patient_phone) + '</span>' : ''} 
+      <span class="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-semibold capitalize ml-1">${esc(e.emergency_type)}</span>
+    </p>
+    <div class="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+      <span>Ambulance: <b class="text-slate-700">${esc(e.ambulance || 'Not assigned')}</b></span>
+      <span>ETA: <b class="text-slate-700">${esc(e.eta || '—')}</b></span>
+    </div>
+    <div class="flex gap-2 pt-1 border-t border-slate-200/60">
+      <button onclick="setCase(${e.id},'completed')" class="px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold transition shadow-sm">
+        <i class="fa-solid fa-check mr-1"></i>Patient Received
+      </button>
+      <button onclick="setCase(${e.id},'cancelled')" class="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-xs font-bold text-slate-700 transition">
+        Divert / Cancel
+      </button>
+    </div>
+  </div>`).join('')
+  : `<div class="text-center p-8 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/40">
+      <i class="fa-regular fa-clock text-2xl text-slate-400"></i>
+      <p class="font-bold text-slate-700 text-sm mt-2">No incoming dispatches right now</p>
+      <p class="text-xs text-slate-400 mt-0.5">When emergency dispatches are routed to this hospital, they appear here in real-time.</p>
+    </div>`;
+}
+
+async function setCase(id, status) {
+  try {
+    await api('/api/hospital/emergencies/' + id, 'PATCH', {status});
+    toast('Emergency dispatch status updated');
+    poll(true);
+  } catch(e) {
+    toast('Update failed: ' + e.message);
+  }
+}
+
+/* ---------- BOOT ---------- */
+try {
+  const savedTheme = localStorage.getItem('rapidcare_hospital_theme') || (localStorage.getItem('rc-dark') ? 'dark' : 'light');
+  applyTheme(savedTheme);
+} catch(e) { applyTheme('light'); }
+
+if (token) {
+  start();
+} else {
+  // If not authenticated, redirect to staff entry portal
+  window.location.href = '/login?role=hospital';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SyncFlow - Central Command Center | RapidCare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.383.0/dist/umd/lucide.min.js"></script>
+<style>
+:root{--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--tx:#0f172a;--mu:#64748b;--soft:#f1f5f9;--green:#047857;--gbg:#d1fae5;--gl:#a7f3d0}
+[data-theme=dark]{--bg:#071412;--card:#0b1e1b;--line:#163832;--tx:#e6ecf8;--mu:#8aa6a0;--soft:#102925;--green:#34d399;--gbg:#064e3b55;--gl:#065f4688}
+*{box-sizing:border-box;margin:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;padding:12px 12px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:16px}.mono{font-family:'JetBrains Mono',monospace}
+.hero{border-radius:24px;padding:28px;color:#fff;background:radial-gradient(circle at 20% 0,#065f46,#064e3b 45%,#022c22 80%,#011d17);border:1px solid #047857;box-shadow:0 18px 40px -20px #022c22}
+.pill{display:inline-flex;gap:8px;align-items:center;font-size:12px;font-weight:700;letter-spacing:.03em;padding:6px 14px;border-radius:99px;background:#0d948833;border:1px solid #2dd4bf55;color:#a7f3d0}
+.hero h1{font-size:clamp(24px,4.5vw,38px);font-weight:800;letter-spacing:-.03em;margin:14px 0 8px;line-height:1.15}
+.hero p{color:#ccfbf1;max-width:740px;font-size:15px;line-height:1.5}
+.hbtns{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid transparent;border-radius:12px;padding:10px 16px;font:700 13px 'Plus Jakarta Sans';cursor:pointer;color:#fff;transition:all .15s}
+.btn svg{width:16px;height:16px}.b-glass{background:#ffffff1f;border-color:#ffffff30}.b-glass:hover{background:#ffffff33}
+.b-go{background:linear-gradient(135deg,#059669,#10b981)}.b-go:hover{filter:brightness(1.08)}
+.b-pri{background:#0f766e}.b-pri:hover{background:#115e59}.b-teal{background:#0d9488}.b-teal:hover{background:#0f766e}
+.btn:disabled{opacity:.6;cursor:wait}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.stat{border-radius:20px;padding:20px;border:1px solid;position:relative}.stat h4{font-size:14px;font-weight:700}
+.stat b{display:block;font:700 38px 'JetBrains Mono';margin:10px 0 4px}.stat small{font-size:13px;font-weight:600}
+.ic{position:absolute;top:18px;right:18px;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#fff}.ic svg{width:18px;height:18px}
+.s1{background:#f0fdfa;border-color:#99f6e4;color:#0f766e}.s1 .ic{background:#0d9488}
+.s2{background:#ecfdf5;border-color:#a7f3d0;color:#047857}.s2 .ic{background:#059669}
+.s3{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}.s3 .ic{background:#2563eb}
+.s4{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}.s4 .ic{background:#16a34a}
+.s5{background:#fffbeb;border-color:#fde68a;color:#b45309}.s5 .ic{background:#d97706}
+.s6{background:#fff1f2;border-color:#fecdd3;color:#be123c}.s6 .ic{background:#e11d48}
+[data-theme=dark] .s1{background:#082723;border-color:#134e48;color:#5eead4}[data-theme=dark] .s2{background:#06241d;border-color:#065f46;color:#6ee7b7}
+[data-theme=dark] .s3{background:#0f1a3a;border-color:#1e3a8a;color:#93c5fd}[data-theme=dark] .s4{background:#0d2818;border-color:#166534;color:#86efac}
+[data-theme=dark] .s5{background:#271707;border-color:#78350f;color:#fcd34d}[data-theme=dark] .s6{background:#2a0c16;border-color:#881337;color:#fda4af}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;padding:8px;border-radius:18px;background:var(--soft);border:1px solid var(--line)}
+.tab{border:0;background:none;color:var(--mu);font:600 14px 'Plus Jakarta Sans';padding:10px 16px;border-radius:12px;cursor:pointer;transition:all .15s}
+.tab.on{background:var(--card);color:#064e3b;font-weight:700;box-shadow:0 1px 4px #0001}[data-theme=dark] .tab.on{color:#6ee7b7;background:#0b1e1b;border:1px solid #163832}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px}.card h3{font-size:18px;font-weight:800;display:flex;align-items:center;gap:10px}.card h3 svg{width:20px;height:20px}
+.hide{display:none!important}.ov{display:grid;grid-template-columns:2fr 1fr;gap:16px}@media(max-width:860px){.ov{grid-template-columns:1fr}}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.mapbox{position:relative;margin-top:16px;border-radius:16px;overflow:hidden;border:1px solid var(--line);height:420px}#map{height:100%;width:100%;background:var(--soft)}
+.gps{position:absolute;z-index:500;top:14px;left:14px;background:var(--card);border-radius:14px;padding:10px 14px;box-shadow:0 6px 20px #0002;font-size:13px;font-weight:700;display:flex;gap:10px;align-items:flex-start}
+.gps svg{width:16px;height:16px;color:#0d9488;margin-top:2px}.gps span{display:block;font:500 12px 'JetBrains Mono';color:var(--mu);margin-top:2px}
+.chip{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:5px 9px;font:700 12px 'Plus Jakarta Sans';box-shadow:0 4px 12px #0002;transform:translate(-50%,-50%)}
+.chip.ph{border-color:#6ee7b7;background:#ecfdf5;color:#064e3b}.chip.off{opacity:.45;filter:grayscale(1)}.chip.am{border-color:#99f6e4;font:600 11px 'JetBrains Mono'}
+.chip.me{background:#0d9488;color:#fff;border:0;font-size:13px;padding:8px 14px;border-radius:99px}.chip i{font-style:normal;background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 5px}
+.ns .row{padding:14px 0;border-bottom:1px solid var(--line);font-size:14px;color:var(--mu)}.ns .row:last-child{border:0}
+.tag{font-weight:800;font-size:12px;border-radius:9px;padding:4px 10px;background:var(--soft);color:var(--tx)}.tag.g{background:#d1fae5;color:#047857}.tag.t{background:#ccfbf1;color:#0f766e}.tag.p{background:#e0f2fe;color:#0369a1}.tag.a{background:#fef3c7;color:#b45309}
+[data-theme=dark] .tag.g{background:#064e3b;color:#6ee7b7}[data-theme=dark] .tag.t{background:#134e4a;color:#5eead4}[data-theme=dark] .tag.p{background:#0c4a6e;color:#7dd3fc}[data-theme=dark] .tag.a{background:#451a03;color:#fcd34d}
+table{width:100%;border-collapse:collapse;margin-top:16px}th{text-align:left;color:var(--mu);font-size:13px;font-weight:700;padding:12px 10px;border-bottom:1px solid var(--line)}
+td{padding:14px 10px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}tr:last-child td{border:0}.r{text-align:right}th.r{text-align:right}
+td small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.id{color:var(--mu)}
+.st{display:inline-block;font:700 11px 'JetBrains Mono',monospace;letter-spacing:.04em;padding:3px 10px;border-radius:99px;border:1px solid var(--gl);background:var(--gbg);color:var(--green);text-transform:uppercase}
+.st.off{background:var(--soft);border-color:var(--line);color:var(--mu)}.st.busy{background:#fef3c7;border-color:#fde68a;color:#b45309}
+.sm{background:var(--soft);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:6px 14px;font:600 13px 'Plus Jakarta Sans';cursor:pointer;transition:all .15s}.sm:hover{border-color:#0d9488;color:#0f766e}
+.add{margin-top:16px}.add h3{font-size:17px}.form{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px}
+.form input{flex:1;min-width:160px;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:500 14px 'Plus Jakarta Sans'}
+.form input:focus{outline:2px solid #0d9488;outline-offset:1px}.ord{border:1px solid var(--line);background:var(--soft);border-radius:16px;padding:16px;margin-top:12px;display:grid;gap:6px}
+.ord p{font-size:13px;color:var(--mu)}.ord p b{color:var(--tx)}.crit{background:#ffe4e6;color:#be123c;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+.empty{color:var(--mu);margin-top:14px;font-size:14px}.vr{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}
+.ok{color:var(--green);font-weight:800}.bad{color:#e11d48;font-weight:800}.toast{position:fixed;bottom:20px;right:20px;background:#064e3b;color:#fff;padding:12px 18px;border-radius:12px;font-weight:600;font-size:14px;z-index:9999}
+.auth{position:fixed;inset:0;background:#0f172acc;backdrop-filter:blur(8px);z-index:99999;display:grid;place-items:center;padding:20px}.login{width:min(420px,100%);background:var(--card);border:1px solid var(--line);border-radius:22px;padding:28px;box-shadow:0 25px 70px #0005}.login h2{font-size:23px;margin:12px 0 6px;font-weight:800}.login p{color:var(--mu);font-size:13px;margin-bottom:18px}.login input{width:100%;padding:12px 15px;margin:6px 0;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:11px;font-size:14px}.login button{width:100%;margin-top:12px;justify-content:center}.login .err{color:#e11d48;font-size:12px;margin-top:8px}
+.leaflet-control-attribution{font-size:10px}
+</style>
+</head>
+<body>
+
+<!-- ADMIN LOGIN -->
+<div id="auth" class="auth">
+  <form class="login" onsubmit="login(event)">
+    <span class="pill"><i data-lucide="shield-alert" style="width:14px;height:14px"></i>RESTRICTED · ADMIN PORTAL</span>
+    <h2>Central Command Center</h2>
+    <p>Sign in with a central administrator account to monitor and orchestrate the live emergency healthcare network.</p>
+    <input id="u" required autocomplete="username" placeholder="Admin username (e.g. admin)">
+    <input id="p" required type="password" autocomplete="current-password" placeholder="Admin password">
+    <div id="err" class="err hide"></div>
+    <button id="loginBtn" class="btn b-pri" type="submit">Sign in to Command Dashboard</button>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);text-align:center">
+      <p style="font-size:12px;color:var(--mu);margin-bottom:6px">Looking for Hospital staff sign-in?</p>
+      <a href="/login" style="font-size:12px;font-weight:700;color:var(--green);text-decoration:none">Go to Hospital Staff Portal &rarr;</a>
+    </div>
+  </form>
+</div>
+
+<div id="app" class="wrap hide">
+
+<!-- SHARED DATA NOTICE -->
+<div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:14px;padding:10px 16px;font-size:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+  <div>
+    <strong>Shared RapidCare records:</strong> Hospital details and map coordinates come from the central directory and are shared with the Hospital portal and Flutter app.
+  </div>
+  <a href="/login" style="font-weight:700;color:#064e3b;text-decoration:none;font-size:12px">Staff Sign-In Portal &rarr;</a>
+</div>
+
+<header class="hero">
+  <span class="pill"><i data-lucide="activity" style="width:14px;height:14px"></i>SYNCFLOW &bull; CENTRAL COMMAND CENTER</span>
+  <h1>Emergency Healthcare Operations</h1>
+  <p>Operations view for hospitals and ambulances across Malad and Goregaon, Mumbai.</p>
+  <div class="hbtns">
+    <button class="btn b-glass" id="themeBtn" onclick="toggleTheme()"><i data-lucide="moon"></i><span>Dark Theme</span></button>
+    <button class="btn b-go" id="syncBtn" onclick="syncLiveData()"><i data-lucide="refresh-cw"></i><span>Refresh Records</span></button>
+    <button class="btn b-glass" onclick="runVerification()"><i data-lucide="play"></i>Run Network Verification</button>
+    <button class="btn b-glass" id="signOutBtn" onclick="signOut()"><i data-lucide="log-out"></i>Sign Out</button>
+  </div>
+</header>
+
+<section class="stats">
+  <div class="stat s1"><h4>Listed Hospitals</h4><div class="ic"><i data-lucide="building-2"></i></div><b id="st-h">0</b><small>Public directory</small></div>
+  <div class="stat s3"><h4>Ambulances With Recent GPS</h4><div class="ic"><i data-lucide="truck"></i></div><b id="st-a">0</b><small>Live driver GPS only</small></div>
+  <div class="stat s4"><h4>ICU Beds</h4><div class="ic"><i data-lucide="heart-pulse"></i></div><b id="st-i">0</b><small>Current directory total</small></div>
+  <div class="stat s6"><h4>Dispatches</h4><div class="ic"><i data-lucide="shield-alert"></i></div><b id="st-d">0</b><small>Recorded dispatches</small></div>
+</section>
+
+<nav class="tabs" id="tabs"></nav>
+
+<section id="v-overview" class="ov">
+  <div class="card">
+    <div class="row" style="flex-wrap:wrap"><h3><i data-lucide="map-pin" style="color:#0d9488"></i>Malad &amp; Goregaon Hospital and Ambulance Map</h3><span style="color:var(--mu);font-weight:600;font-size:13px">Mumbai, Maharashtra</span></div>
+    <div class="mapbox">
+      <div class="gps"><i data-lucide="navigation"></i><div id="gpsTitle">Acquiring GPS…<span id="gpsXY">waiting for location</span></div></div>
+      <div id="map"></div>
+    </div>
+  </div>
+  <div class="card ns">
+    <h3><i data-lucide="activity" style="color:#059669"></i>Emergency Network Status</h3>
+    <div style="margin-top:12px">
+      <div class="row"><span>Listed Hospitals</span><span class="tag" id="n-h">0 Facilities</span></div>
+      <div class="row"><span>Ambulances with recent GPS</span><span class="tag t" id="n-a">0 Live</span></div>
+      <div class="row"><span>Hospital ICU Total</span><span class="tag p" id="n-i">0 ICU Beds</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="v-hospitals" class="hide"><div class="card">
+<h3><i data-lucide="building-2" style="color:#0f766e"></i>Hospital Network Directory</h3>
+<p class="empty">Hospital addresses, map coordinates, and contact numbers are shared with the Hospital portal and Flutter app.</p>
+<div style="overflow-x:auto"><table><thead><tr><th>ID</th><th>Hospital</th><th>Phone</th><th>Admin-managed Coordinates</th><th class="r">General Beds</th><th class="r">ICU Beds</th><th>Status</th><th class="r">Action</th></tr></thead><tbody id="t-h"></tbody></table></div>
+</div><div class="card add"><h3>Add Hospital Facility</h3><div class="form"><input id="h-name" placeholder="Hospital Name"><input id="h-loc" placeholder="Full address"><input id="h-phone" placeholder="Phone number"><input id="h-lat" type="number" step="any" placeholder="Latitude"><input id="h-lng" type="number" step="any" placeholder="Longitude"><button class="btn b-pri" onclick="addHospital()">Add Hospital</button></div></div></section>
+
+<section id="v-fleet" class="hide"><div class="card">
+<h3><i data-lucide="truck" style="color:#0d9488"></i>Ambulance Fleet &amp; Drivers</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>ID</th><th>Driver</th><th>Vehicle</th><th>Type</th><th>Status</th><th class="r">Duty Toggle</th></tr></thead><tbody id="t-f"></tbody></table></div>
+</div><div class="card add"><h3>Add Ambulance Unit</h3><div class="form"><input id="f-name" placeholder="Driver Name"><input id="f-veh" value="MH-02-ER-9012"><button class="btn b-teal" onclick="addUnit()">Add Unit</button></div></div></section>
+
+<section id="v-emergencies" class="hide"><div class="card"><h3><i data-lucide="siren" style="color:#e11d48"></i>Active Emergency Logs</h3><div id="c-e"></div></div></section>
+<section id="v-reviews" class="hide"><div class="card">
+<h3><i data-lucide="star" style="color:#d97706"></i>Review Moderation</h3>
+<p class="empty">Only Admin can approve, reject, or hide reviews. Approved reviews appear on the matching facility portal and count toward its rating. Reported reviews stay visible until Admin acts.</p>
+<div class="form" style="margin-top:16px">
+  <select id="reviewFacility" onchange="renderReviewQueue()" style="min-width:220px;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:500 14px 'Plus Jakarta Sans'"><option value="all">All facilities</option></select>
+  <select id="reviewStatus" onchange="renderReviewQueue()" style="min-width:170px;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:500 14px 'Plus Jakarta Sans'"><option value="all">All review statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="hidden">Hidden</option></select>
+  <input id="reviewSearch" type="search" placeholder="Search facility or review text…" oninput="renderReviewQueue()" style="flex:1;min-width:220px;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:500 14px 'Plus Jakarta Sans'">
+</div><div id="reviewList"></div>
+</div></section>
+
+<section id="v-verification" class="hide"><div class="card"><h3><i data-lucide="shield-check" style="color:#059669"></i>Network Verification</h3>
+<p class="empty" id="v-sum">Run checks for the configured Admin, Hospital, and Ambulance endpoints.</p><div id="v-list"></div></div></section>
+
+</div>
+
+<script>
+const API=location.port==='5000'?'':'http://127.0.0.1:5000',POLL_MS=5000,DEF=[19.1810,72.8510],TOKEN_KEY='rapidcare_admin_token',EXPIRED='Admin session expired. Please sign in again.';
+let S={hosp:[],fleet:[],emerg:[],reviews:[],stats:{}},tab='overview',map,layer,meMarker,me=null,tiles,token=null;
+try{token=sessionStorage.getItem(TOKEN_KEY)}catch(e){}
+const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c])),icons=()=>window.lucide&&lucide.createIcons();
+const toast=m=>{const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)};
+const isAdmin=u=>String((u&&u.role)||'').toLowerCase()==='admin';
+
+/* ---------- auth state (Bearer token in sessionStorage, independent of Flask cookie) ---------- */
+function stopPolling(){if(window.poller){clearInterval(window.poller);window.poller=null}}
+function startPolling(){stopPolling();window.poller=setInterval(refresh,POLL_MS)}
+function clearAuth(){stopPolling();token=null;try{sessionStorage.removeItem(TOKEN_KEY)}catch(e){}}
+const authErr=m=>Object.assign(new Error(m),{auth:true});
+function authFail(msg=EXPIRED){clearAuth();showLogin(msg)}
+function showLogin(msg=''){
+  stopPolling();$('app').classList.add('hide');$('auth').classList.remove('hide');
+  $('p').value='';$('err').textContent=msg;$('err').classList.toggle('hide',!msg);
+}
+
+async function api(path,method='GET',body){
+  if(!token){authFail('');throw authErr('Admin login required')}
+  const h={Authorization:'Bearer '+token};
+  if(body)h['Content-Type']='application/json';
+  const r=await fetch(API+path,{method,headers:h,body:body?JSON.stringify(body):undefined});
+  if(r.status===401||r.status===403){authFail(EXPIRED);throw authErr(EXPIRED)}
+  if(!r.ok){let d={};try{d=await r.json()}catch(e){}throw new Error(d.message||'HTTP '+r.status)}
+  return r.json();
+}
+const get=p=>api(p).catch(e=>{if(e.auth)throw e;return null});
+
+async function login(e){
+  e.preventDefault();$('err').classList.add('hide');
+  const btn=$('loginBtn');btn.disabled=true;
+  try{
+    const d=await fetch(API+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('u').value,password:$('p').value})});
+    const x=await d.json().catch(()=>({}));
+    if(!d.ok)throw new Error(x.message||'Invalid login');
+    if(!isAdmin({role:x.role||(x.user&&x.user.role)}))throw new Error('Admin access required');
+    if(!x.token)throw new Error('Login did not return a token');
+    token=x.token;sessionStorage.setItem(TOKEN_KEY,token);
+    await start();
+  }catch(x){
+    if(x instanceof TypeError)x=new Error('Cannot reach Flask server.');
+    $('err').textContent=x.message||'Login failed.';$('err').classList.remove('hide')
+  }finally{btn.disabled=false}
+}
+async function start(){
+  try{
+    const me=await api('/api/admin/me');
+    if(!isAdmin(me.user)){clearAuth();showLogin('Admin access required');return}
+    $('auth').classList.add('hide');$('app').classList.remove('hide');
+    if(map)setTimeout(()=>map.invalidateSize(),50);
+    await refresh();if(token)startPolling();icons()
+  }catch(e){
+    if(token){
+      if(e instanceof TypeError)showLogin('Cannot reach Flask server.');else showLogin(e.message)
+    }
+  }
+}
+function signOut(){
+  const t=token;
+  if(t)fetch(API+'/api/auth/logout',{method:'POST',headers:{Authorization:'Bearer '+t}}).catch(()=>{});
+  clearAuth();showLogin('')
+}
+
+function applyTheme(t){
+  document.documentElement.dataset.theme=t;
+  $('themeBtn').innerHTML=`<i data-lucide="${t==='dark'?'sun':'moon'}"></i><span>${t==='dark'?'Light':'Dark'} Theme</span>`;
+  try{localStorage.setItem('rc-theme',t)}catch(e){}if(map)setTiles();icons()
+}
+function toggleTheme(){applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}
+
+const TABS=[['overview','Command Overview'],['hospitals','Hospitals'],['fleet','Fleet'],['emergencies','Emergencies'],['reviews','Reviews'],['verification','Network Verification']];
+function drawTabs(){
+  const n={hospitals:S.hosp.length,fleet:S.fleet.length,emergencies:S.emerg.length,reviews:S.reviews.filter(r=>r.status==='pending').length};
+  $('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab ${k===tab?'on':''}" onclick="switchTab('${k}')">${l}${k in n?` (${n[k]})`:''}</button>`).join('')
+}
+function switchTab(k){tab=k;TABS.forEach(([t])=>$('v-'+t).classList.toggle('hide',t!==k));drawTabs();if(k==='overview'&&map)setTimeout(()=>map.invalidateSize(),50)}
+
+function setTiles(){if(tiles)map.removeLayer(tiles);tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map)}
+function initMap(){map=L.map('map',{zoomControl:true}).setView(DEF,13);layer=L.layerGroup().addTo(map);setTiles()}
+const chip=(cls,html,lat,lng)=>L.marker([lat,lng],{icon:L.divIcon({className:'',html:`<div class="chip ${cls}">${html}</div>`,iconSize:[0,0]})});
+const hasPos=o=>Number.isFinite(+o.lat)&&Number.isFinite(+o.lng)&&o.lat!==null&&o.lng!==null;
+function drawMap(){
+  if(!map)return;layer.clearLayers();
+  S.hosp.filter(hasPos).forEach(h=>chip('',`🏥 ${esc(h.name)}${h.rating?` <i>★ ${h.rating}</i>`:''}`,h.lat,h.lng).addTo(layer));
+  S.fleet.filter(f=>hasPos(f)&&f.location_is_live&&f.status!=='Offline').forEach(f=>chip('am',`🚑 AMB ${esc((f.vehicle_number||'').slice(-4))}`,f.lat,f.lng).addTo(layer));
+  if(me){meMarker&&map.removeLayer(meMarker);meMarker=chip('me','📍 LIVE YOU',me[0],me[1]).addTo(map)}
+}
+function trackMe(){
+  const set=(lat,lng,label)=>{$('gpsTitle').firstChild.textContent=label;$('gpsXY').textContent=`${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E`};
+  if(!navigator.geolocation){set(...DEF,'GPS unavailable · coverage area shown');return}
+  let first=true;navigator.geolocation.watchPosition(p=>{
+    me=[p.coords.latitude,p.coords.longitude];set(me[0],me[1],'Live GPS Tracing Active');
+    if(first){map.setView(me,14);first=false}drawMap()
+  },()=>{me=null;set(...DEF,'GPS blocked · coverage area shown')},{enableHighAccuracy:true,maximumAge:5000,timeout:15000})
+}
+const hActive=h=>h.active??!/not|inactive|offline/i.test(h.status||'');
+
+function render(){
+  const st=S.stats,o=k=>st[k]??0,vals={h:o('active_hospitals'),a:o('ambulances_online'),i:o('total_icu_beds'),d:o('dispatches_in_transit')};
+  Object.entries(vals).forEach(([k,v])=>$('st-'+k).textContent=v);
+  $('n-h').textContent=vals.h+' Facilities';$('n-a').textContent=vals.a+' Live';$('n-i').textContent=vals.i+' ICU Beds';
+
+  $('t-h').innerHTML=S.hosp.map(h=>`<tr><td class="id">#${h.id}</td><td><b>${esc(h.name)}</b><small>${esc(h.location)}</small></td><td class="mono">${esc(h.phone||'No phone on file')}</td><td><div class="form" style="margin:0;flex-wrap:nowrap;gap:6px"><input id="h-lat-${h.id}" type="number" step="any" min="-90" max="90" aria-label="Latitude for ${esc(h.name)}" value="${h.lat==null?'':Number(h.lat)}" placeholder="Latitude" style="min-width:110px;width:110px;padding:7px"><input id="h-lng-${h.id}" type="number" step="any" min="-180" max="180" aria-label="Longitude for ${esc(h.name)}" value="${h.lng==null?'':Number(h.lng)}" placeholder="Longitude" style="min-width:110px;width:110px;padding:7px"><button class="sm" onclick="saveHospitalLocation(${h.id})">Save</button></div></td><td class="r"><b>${h.general_beds}</b></td><td class="r"><b style="color:var(--green)">${h.icu_beds}</b></td><td><span class="st ${hActive(h)?'':'off'}">${hActive(h)?'Enabled':'Disabled'}</span></td><td class="r"><button class="sm" onclick="toggleHospital(${h.id})">${hActive(h)?'Deactivate':'Activate'}</button></td></tr>`).join('');
+
+  $('t-f').innerHTML=S.fleet.map(f=>{const off=f.status==='Offline';return `<tr><td class="id">#${f.id}</td><td><b>${esc(f.driver)}</b><small class="mono">${esc(f.phone||'')}</small></td><td class="mono"><b>${esc(f.vehicle_number)}</b></td><td>${esc(f.type||'ALS (Advanced Life Support)')}</td><td><span class="st ${off?'off':/route|busy/i.test(f.status)?'busy':''}">${esc(f.location_is_live?f.status:f.status_label)}</span></td><td class="r"><button class="sm" onclick="setUnit(${f.id},'${off?'Available':'Offline'}')">Set ${off?'Online':'Offline'}</button></td></tr>`}).join('');
+
+  $('c-e').innerHTML=S.emerg.length?S.emerg.map(e=>`<div class="ord"><div class="row"><b>${esc(e.code||'#'+e.id)}</b><span class="crit">${esc(e.triage_level||e.status||'Active')}</span></div><p><b>Patient:</b> ${esc(e.patient_name||'Unknown')} · <b>Type:</b> ${esc(e.emergency_type||'-')}</p><p><b>Hospital:</b> ${esc(e.hospital||'-')} · <b>ETA:</b> ${esc(e.eta||'-')}</p></div>`).join(''):'<p class="empty">No unassigned emergencies at the moment. All dispatches are routed.</p>';
+  renderReviewQueue();drawTabs();drawMap();icons()
+}
+
+function renderReviewQueue(){
+  if(!$('reviewFacility'))return;
+  const selected=$('reviewFacility').value||'all';
+  const options=[['all','All hospitals'],...S.hosp.map(x=>[`hospital:${x.id}`,`Hospital · ${x.name}`])];
+  $('reviewFacility').innerHTML=options.map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('');
+  $('reviewFacility').value=options.some(([v])=>v===selected)?selected:'all';
+  const facility=$('reviewFacility').value,status=$('reviewStatus').value,search=$('reviewSearch').value.trim().toLowerCase();
+  const list=S.reviews.filter(r=>(facility==='all'||facility===`${r.facility_type}:${r.facility_id}`)&&(status==='all'||status===r.status)&&(!search||`${r.facility_name} ${r.facility_type} ${r.facility_id} ${r.comment} ${r.status} ${r.rating}`.toLowerCase().includes(search)));
+  $('reviewList').innerHTML=list.length?list.map(r=>`<article class="ord"><div class="row"><strong>${esc(r.facility_name)} · ${r.rating}/5 ★</strong><span class="tag ${r.status==='pending'?'a':r.status==='approved'?'g':''}">${esc(r.status)}</span></div><p>${esc(r.facility_type)} #${r.facility_id} · ${esc((r.submitted_at||'').slice(0,10))}${r.reported?' · <b style="color:#be123c">Reported by facility</b>':''}</p><p style="white-space:pre-wrap">${esc(r.comment||'Rating only — no comment')}</p>${r.reported?`<p><b>Facility report:</b> ${esc(r.report_reason)}</p>`:''}<div class="form">${r.status!=='approved'?`<button class="sm" onclick="moderateReview(${r.id},'approved')">Approve</button>`:''}${r.status==='pending'?`<button class="sm" onclick="moderateReview(${r.id},'rejected')">Reject</button>`:''}${r.status==='approved'?`<button class="sm" onclick="moderateReview(${r.id},'hidden')">Hide review</button>`:''}</div></article>`).join(''):'<p class="empty">No reviews match these filters.</p>';
+}
+
+async function refresh(){
+  if(!token)return;const t=token;
+  let stats,hosp,fleet,emerg,reviews;
+  try{[stats,hosp,fleet,emerg,reviews]=await Promise.all(['stats','hospitals','fleet','emergencies','reviews'].map(k=>get('/api/admin/'+k)))}
+  catch(e){if(e.auth)return;throw e}
+  if(!token||token!==t)return;
+  if(!stats&&!hosp)return;
+  S={stats:stats||S.stats,hosp:hosp||S.hosp,fleet:fleet||S.fleet,emerg:emerg||S.emerg,reviews:reviews||S.reviews};
+  render()
+}
+const act=async(fn,msg)=>{try{await fn();toast(msg)}catch(e){toast('Failed: '+e.message)}await refresh()};
+const toggleHospital=id=>act(()=>api('/api/admin/hospitals/'+id,'PATCH'),'Hospital status updated');
+const setUnit=(id,status)=>act(()=>api('/api/admin/fleet/'+id,'PATCH',{status}),'Ambulance set '+status);
+
+function saveHospitalLocation(id){
+  const latText=$('h-lat-'+id).value,lngText=$('h-lng-'+id).value;
+  if(!latText||!lngText)return toast('Enter both hospital coordinates');
+  const lat=Number(latText),lng=Number(lngText);
+  if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat < -90||lat > 90||lng < -180||lng > 180)return toast('Enter valid latitude (-90 to 90) and longitude (-180 to 180)');
+  act(()=>api('/api/admin/hospitals/'+id,'PATCH',{lat,lng}),'Hospital coordinates updated');
+}
+
+function addHospital(){
+  const name=$('h-name').value.trim(),location=$('h-loc').value.trim(),phone=$('h-phone').value.trim();if(!name)return toast('Enter a hospital name');if(!location)return toast('Enter the full hospital address');if(!phone)return toast('Enter the hospital phone number');if(!$('h-lat').value||!$('h-lng').value)return toast('Enter the hospital map coordinates');
+  act(async()=>{await api('/api/admin/hospitals','POST',{name,location,phone,lat:Number($('h-lat').value),lng:Number($('h-lng').value)});['h-name','h-loc','h-phone','h-lat','h-lng'].forEach(id=>$(id).value='')},'Hospital added')
+}
+function addUnit(){
+  const driver=$('f-name').value.trim();if(!driver)return toast('Enter a driver name');
+  act(async()=>{await api('/api/admin/fleet','POST',{driver,vehicle_number:$('f-veh').value.trim()});$('f-name').value=''},'Ambulance unit added')
+}
+async function syncLiveData(){
+  const btn=$('syncBtn');btn.disabled=true;
+  try{
+    const result=await api('/api/admin/sync','POST');
+    await refresh();
+    toast(result.message||'RapidCare records refreshed.');
+  }catch(e){toast('Sync failed: '+e.message)}finally{btn.disabled=false}
+}
+
+async function moderateReview(id,status){
+  try{await api('/api/admin/reviews/'+id,'PATCH',{status});toast('Review '+status)}catch(e){toast('Could not update review: '+e.message)}
+  await refresh()
+}
+
+/* ---------- Live verification (all requests go through api() => Bearer token) ---------- */
+async function runVerification(){
+  if(!token)return;
+  switchTab('verification');
+  const ping=p=>async()=>{await api(p)},sum=(a,k)=>a.reduce((n,x)=>n+(+x[k]||0),0),need=async()=>{
+    const [s,h,f,e]=await Promise.all(['stats','hospitals','fleet','emergencies'].map(k=>api('/api/admin/'+k)));
+    return{s,h,f,e}
+  },ok=c=>{if(!c)throw Error('mismatch')};
+  const T=[
+    ['Admin authentication/session',()=>api('/api/admin/me')],
+    ['Admin stats endpoint',ping('/api/admin/stats')],
+    ['Hospital directory endpoint',ping('/api/admin/hospitals')],
+    ['Ambulance fleet endpoint',ping('/api/admin/fleet')],
+    ['Emergency log endpoint',ping('/api/admin/emergencies')],
+    ['Admin review moderation endpoint',ping('/api/admin/reviews')],
+    ['Sync reports the actual connected source',async()=>{const x=await api('/api/admin/sync');ok(x.source==='RapidCare database'&&x.external_feeds_connected===false)}],
+    ['Stats payload contains hospital, ambulance, and dispatch counters',async()=>{const{s}=await need();ok(['active_hospitals','ambulances_online','total_icu_beds','dispatches_in_transit'].every(k=>k in s))}],
+    ['Hospital bed values are numeric',async()=>{const{h}=await need();ok(h.every(x=>Number.isFinite(+x.icu_beds)&&Number.isFinite(+x.general_beds)))}],
+    ['ICU total matches hospital records',async()=>{const{s,h}=await need();ok(+s.total_icu_beds===sum(h,'icu_beds'))}],
+    ['Online ambulance count matches fleet',async()=>{const{s,f}=await need();ok(+s.ambulances_online===f.filter(x=>x.status!=='Offline').length)}],
+    ['Browser GPS available',()=>new Promise((res,rej)=>navigator.geolocation?navigator.geolocation.getCurrentPosition(res,()=>rej(Error('blocked')),{timeout:6000}):rej(Error('unsupported')))],
+    ['Live coordinates exist for map network',async()=>{const{h,f}=await need();ok([...h,...f].some(hasPos))}]
+  ];
+  $('v-sum').textContent='Running…';$('v-list').innerHTML='';let pass=0;
+  for(const[i,[name,fn]]of T.entries()){
+    if(!token){$('v-sum').textContent='Verification stopped: admin session ended.';return}
+    const t0=performance.now();let good=true,why='';
+    try{await fn()}catch(e){good=false;why=e.message}
+    pass+=good;
+    $('v-list').insertAdjacentHTML('beforeend',`<div class="vr"><span>${i+1}. ${name}${why?` <small style="display:inline;color:var(--mu)">(${esc(why)})</small>`:''}</span><span class="${good?'ok':'bad'}">${good?'PASSED':'FAILED'} · ${Math.round(performance.now()-t0)}ms</span></div>`)
+  }
+  $('v-sum').textContent=`${pass} of ${T.length} checks passed.`
+}
+
+/* ---------- boot: no Admin API call happens until a token has been verified via /api/admin/me ---------- */
+(async function(){
+  let t='light';try{t=localStorage.getItem('rc-theme')||'light'}catch(e){}
+  drawTabs();initMap();applyTheme(t);trackMe();
+  if(token)await start();else showLogin()
+})();
+</script>
+</body>
+</html>
