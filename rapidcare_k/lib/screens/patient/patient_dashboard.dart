@@ -147,32 +147,29 @@ class _PatientHomeTabContentState extends State<PatientHomeTabContent> with Sing
   // Drives the pulsing ring around the Emergency button (same loop as the animation video).
   late final AnimationController _pulse;
 
-  // Local settings state (placeholders until they are wired to real preferences).
-  bool _notifications = true;
-  bool _shareLocation = true;
+  // Optional on-device preview; emergency flow requests location independently.
+  bool _showLocationPreview = false;
   bool _locationBusy = false;
-  String _locationLabel = 'Finding device location…';
+  String _locationLabel = 'GPS is requested when you start emergency help.';
   Timer? _locationTimer;
 
   @override
   void initState() {
     super.initState();
     _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat();
-    _refreshLocation();
-    _locationTimer = Timer.periodic(const Duration(seconds: 30), (_) => _refreshLocation());
   }
 
-  Future<void> _refreshLocation() async {
-    if (_locationBusy || !_shareLocation) return;
+  Future<void> _refreshLocation({bool requestPermission = true}) async {
+    if (_locationBusy || !_showLocationPreview) return;
     _locationBusy = true;
-    if (mounted) setState(() => _locationLabel = 'Updating live location…');
+    if (mounted) setState(() => _locationLabel = 'Updating on-device location preview…');
     try {
-      final position = await getFreshLocation();
-      if (!mounted) return;
-      setState(() => _locationLabel = 'Live GPS · ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)} · ±${position.accuracy.round()} m');
+      final position = await getFreshLocation(requestPermission: requestPermission);
+      if (!mounted || !_showLocationPreview) return;
+      setState(() => _locationLabel = 'On-device GPS preview · ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)} · ±${position.accuracy.round()} m');
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _locationLabel = e.toString().replaceFirst('Exception: ', 'Location unavailable: '));
+      if (!mounted || !_showLocationPreview) return;
+      setState(() => _locationLabel = e.toString().replaceFirst('Exception: ', 'Location preview unavailable: '));
     } finally {
       _locationBusy = false;
     }
@@ -214,24 +211,24 @@ class _PatientHomeTabContentState extends State<PatientHomeTabContent> with Sing
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   activeColor: const Color(0xFF00796B),
-                  title: const Text('Emergency notifications', style: TextStyle(fontSize: 14)),
-                  subtitle: const Text('Ambulance and hospital status updates', style: TextStyle(fontSize: 11)),
-                  value: _notifications,
+                  title: const Text('Show location preview', style: TextStyle(fontSize: 14)),
+                  subtitle: const Text('On this device only. Emergency help requests location when needed.', style: TextStyle(fontSize: 11)),
+                  value: _showLocationPreview,
                   onChanged: (v) {
-                    setSheet(() => _notifications = v);
-                    setState(() {});
-                  },
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  activeColor: const Color(0xFF00796B),
-                  title: const Text('Share live location', style: TextStyle(fontSize: 14)),
-                  subtitle: const Text('Used to find nearby hospitals and ambulances', style: TextStyle(fontSize: 11)),
-                  value: _shareLocation,
-                  onChanged: (v) {
-                    setSheet(() => _shareLocation = v);
-                    setState(() => _locationLabel = v ? 'Updating live location…' : 'Location sharing is off');
-                    if (v) _refreshLocation();
+                    setSheet(() => _showLocationPreview = v);
+                    setState(() => _locationLabel = v
+                        ? 'Updating on-device location preview…'
+                        : 'GPS is requested when you start emergency help.');
+                    if (v) {
+                      _refreshLocation();
+                      _locationTimer ??= Timer.periodic(
+                        const Duration(seconds: 30),
+                        (_) => _refreshLocation(requestPermission: false),
+                      );
+                    } else {
+                      _locationTimer?.cancel();
+                      _locationTimer = null;
+                    }
                   },
                 ),
                 const Divider(),
@@ -277,7 +274,7 @@ class _PatientHomeTabContentState extends State<PatientHomeTabContent> with Sing
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Hello,',
+                      'Hello, Guest',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 16,
@@ -342,13 +339,17 @@ class _PatientHomeTabContentState extends State<PatientHomeTabContent> with Sing
                       child: Text(_locationLabel, overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
                     ),
-                    const SizedBox(width: 2),
-                    SizedBox(width: 30, height: 30, child: IconButton(
-                      padding: EdgeInsets.zero,
-                      tooltip: 'Refresh live location',
-                      onPressed: _locationBusy ? null : _refreshLocation,
-                      icon: Icon(_locationBusy ? Icons.more_horiz : Icons.refresh, color: Colors.white70, size: 17),
-                    )),
+                    if (_showLocationPreview)
+                      SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          tooltip: 'Refresh location preview',
+                          onPressed: _locationBusy ? null : _refreshLocation,
+                          icon: Icon(_locationBusy ? Icons.more_horiz : Icons.refresh, color: Colors.white70, size: 17),
+                        ),
+                      ),
                   ]),
                 ),
               ],
@@ -412,11 +413,11 @@ class _PatientHomeTabContentState extends State<PatientHomeTabContent> with Sing
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text(
-                                  'EMERGENCY',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'EMERGENCY',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,
@@ -424,18 +425,18 @@ class _PatientHomeTabContentState extends State<PatientHomeTabContent> with Sing
                                     letterSpacing: 1.1,
                                   ),
                                 ),
-                                SizedBox(height: 2),
-                                Text(
-                                  'Get immediate help & ambulance',
-                                  style: TextStyle(color: Colors.white70, fontSize: 11),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                SizedBox(height: 1),
-                                Text(
-                                  'Average dispatch: 6-8 mins',
-                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
-                                ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Start a request — no sign-in needed',
+                        style: TextStyle(color: Colors.white70, fontSize: 11),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(height: 1),
+                      Text(
+                        'Patient account is optional',
+                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                      ),
                               ],
                             ),
                           ),
@@ -459,7 +460,7 @@ class _PatientHomeTabContentState extends State<PatientHomeTabContent> with Sing
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
                       Text(
-                        'Cardiac First Response Tip',
+                        'Need an ambulance now?',
                         style: TextStyle(
                           color: Color(0xFF004D40),
                           fontSize: 15,
@@ -468,7 +469,7 @@ class _PatientHomeTabContentState extends State<PatientHomeTabContent> with Sing
                       ),
                       SizedBox(height: 6),
                       Text(
-                        'In suspected heart attack, keep the patient calm in a seated position. Do not give water or heavy food. Request ALS ambulance immediately.',
+                        'For an immediate emergency in India, call 108. RapidCare does not replace emergency services.',
                         style: TextStyle(
                           color: Colors.black87,
                           fontSize: 12,

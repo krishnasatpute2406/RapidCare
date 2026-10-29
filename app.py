@@ -8,35 +8,67 @@ import requests
 from flask import Flask, jsonify, render_template, request, session
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import inspect as sqlalchemy_inspect
 from sqlalchemy.exc import IntegrityError
 from itsdangerous import BadData, URLSafeTimedSerializer
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 APP_ENV = os.environ.get("RAPIDCARE_ENV", "development").strip().lower()
 IS_PRODUCTION = APP_ENV == "production"
+DEFAULT_DATABASE_URI = "sqlite:///rapidcare.malad-goregaon.demo.db"
+
+
+def normalize_database_uri(uri):
+    database_uri = (uri or "").strip()
+    if database_uri.startswith("postgres://"):
+        return "postgresql+psycopg://" + database_uri[len("postgres://"):]
+    if database_uri.startswith("postgresql://"):
+        return "postgresql+psycopg://" + database_uri[len("postgresql://"):]
+    return database_uri
+
+
+def resolve_database_uri(uri, production=False):
+    database_uri = normalize_database_uri(uri)
+    if not database_uri:
+        if production:
+            raise RuntimeError("Set RAPIDCARE_DATABASE_URI to the shared PostgreSQL connection string in production.")
+        return DEFAULT_DATABASE_URI
+    if production and not database_uri.startswith("postgresql+psycopg://"):
+        raise RuntimeError("Production requires a persistent PostgreSQL URL using the Psycopg driver; local SQLite is disabled.")
+    return database_uri
+
+
 configured_secret = os.environ.get("RAPIDCARE_SECRET", "").strip()
 if IS_PRODUCTION and len(configured_secret) < 32:
     raise RuntimeError("Set RAPIDCARE_SECRET to a random value of at least 32 characters in production.")
 app.config["SECRET_KEY"] = configured_secret or secrets.token_urlsafe(48)
 extra_cors_origins = [origin.strip() for origin in os.environ.get("RAPIDCARE_CORS_ORIGINS", "").split(",") if origin.strip()]
 CORS(app, origins=[r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"] + extra_cors_origins)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-    "RAPIDCARE_DATABASE_URI", "sqlite:///rapidcare.malad-goregaon.demo.db"
-)
+raw_database_uri = os.environ.get("RAPIDCARE_DATABASE_URI") or os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_DATABASE_URI"] = resolve_database_uri(raw_database_uri, IS_PRODUCTION)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = IS_PRODUCTION or os.environ.get("RAPIDCARE_COOKIE_SECURE", "").lower() in {"1", "true", "yes"}
+if app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql+psycopg://"):
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "pool_recycle": 300}
 db = SQLAlchemy(app)
+if IS_PRODUCTION:
+    # Render is the single trusted reverse proxy in the public demo deployment.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 signer = URLSafeTimedSerializer(app.config["SECRET_KEY"], salt="rapidcare-auth")
 SLACK_WEBHOOK_URL = ""
 DEMO_PHONE = os.environ.get("RAPIDCARE_DEMO_PHONE", "")
-DEMO_PASSWORD = os.environ.get("RAPIDCARE_DEMO_PASSWORD", "").strip()
+configured_demo_password = os.environ.get("RAPIDCARE_DEMO_PASSWORD", "").strip()
+if IS_PRODUCTION and len(configured_demo_password) < 12:
+    raise RuntimeError("Set RAPIDCARE_DEMO_PASSWORD to at least 12 characters in production.")
+DEMO_PASSWORD = configured_demo_password
 if not DEMO_PASSWORD:
     # Keep the displayed development demo account usable after a fresh setup.
-    # Production still requires an explicitly configured password at seeding time.
+    # Production is validated above and never relies on the development default.
     DEMO_PASSWORD = "rapidcare123" if not IS_PRODUCTION else secrets.token_urlsafe(14)
 AUTH_FAILURES = {}
 AUTH_WINDOW_SECONDS = 600
@@ -116,6 +148,7 @@ class AmbulanceModel(db.Model):
     phone = db.Column(db.String(50), default="")
     pin_hash = db.Column(db.String(255))
     license_number = db.Column(db.String(100))
+    approval_status = db.Column(db.String(20), nullable=False, default="approved")
     type = db.Column(db.String(80), default="BLS (Basic Life Support)")
     status = db.Column(db.String(100), default="Available")
     lat = db.Column(db.Float)
@@ -225,7 +258,7 @@ FACILITIES = {
 }
 TYPE_NEEDS = {
     "cardiac": ("cardiologist", "cath_lab"),
-    "burn": ("plastic_surgeon", "burn_ward"),
+    "burn": ("plastic_surgeon", "burn_unit"),
     "trauma": ("orthopaedic", "emergency_physician"),
     "accident": ("orthopaedic", "emergency_physician"),
     "pregnancy": ("obgyn", "maternity_ot"),
@@ -247,35 +280,48 @@ VERIFIED_HOSPITAL_CAPABILITIES = {
     "Dr. Sabnis Hospital": set(),
     "Siddharth Municipal General Hospital": set(),
     "Trauma Hospital": set(),
+    "National Burns Center": {"plastic_surgeon", "burn_unit"},
 }
 ACTIVE_CASE = ("incoming", "accepted", "en_route", "arrived", "picked_up")
 LIVE_CASE = ACTIVE_CASE + ("reached_hospital",)
 IN_TRANSIT = ("accepted", "en_route", "picked_up")
 
 def seed_all():
-    if not HospitalModel.query.first():
-        rows = [
-            ("Zeinith Multispeciality Hospital", "Parth Business Plaza, New Link Road, Mith Chowky, Orlem, Malad West, Mumbai, Maharashtra 400064", "022-28837863", 14, 4, 19.196729, 72.834163),
-            ("Savitri Bai Phule BMC Hospital", "Riddhi Garden Road, Malad East, Mumbai, Maharashtra 400097", "022-28492388", 28, 6, 19.1777529, 72.8724378),
-            ("Government General Hospital, Malwani Malad", "Bhoomi Park Road, Janakalyan Nagar, Malwani, Mumbai, Maharashtra 400095", "9869320123", 18, 4, 19.2007076, 72.8221715),
-            ("Ashoka General Hospital I.C.C.U and Maternity Home", "First Floor, Ashoka Palace, Makrani Pada, Matanpur Nagar, Malad East, Mumbai, Maharashtra 400097", "022-28775084", 14, 3, 19.1818080, 72.8531321),
-            ("Suvidha Hospital and Iccu", "No. 4, Neelam Apartments, near Triveni Nagar, Kokani Pada, Kurar, Malad East, Mumbai, Maharashtra 400097", "022-28431963", 10, 3, 19.198999, 72.866717),
-            ("SRV Hospital", "179/180, Road No. 2, Kamal Charan Building, Jawahar Nagar, Goregaon West, Mumbai, Maharashtra 400062", "022-68840000", 16, 5, 19.1589907, 72.8492265),
-            ("Life Line Medicare Hospital Pvt Ltd", "A/1, Gagan Chambers, near Gokuldham Medical Centre, Gokuldham, Goregaon East, Mumbai, Maharashtra 400063", "022-68478175", 12, 4, 19.1723310, 72.8684660),
-            ("Dr. Sabnis Hospital", "6A, Nivara Building, Naikwadi Road, Churi Wadi, Goregaon East, Mumbai, Maharashtra 400063", "9821140973", 10, 3, 19.1671157, 72.8513635),
-            ("Siddharth Municipal General Hospital", "Siddharth Municipal General Hospital, Lokmanya Tilak Road No. 5, New Siddharth Nagar, Goregaon West, Mumbai, Maharashtra 400104", "022-28766885", 20, 5, 19.1595728, 72.8403060),
-            ("Trauma Hospital", "I B Patel Road, Goregaon East, Mumbai, Maharashtra 400063", "", 12, 4, 19.1604330, 72.8562440),
-        ]
-        db.session.add_all([
-            HospitalModel(name=n, location=a, phone=ph,
-                          status="Listed",
-                          ed_status="Call to confirm",
-                          available_beds=b, icu_beds=i, lat=la, lng=lo,
-                          rating=None,
-                          **{field: field in VERIFIED_HOSPITAL_CAPABILITIES.get(n, set())
-                             for field in HOSPITAL_CAPABILITY_FIELDS})
-            for n, a, ph, b, i, la, lo in rows
-        ])
+    # These are directory listings, not live bed claims. Availability stays call-to-confirm.
+    # The National Burns Center capability flags are supported by its official service and consultant pages;
+    # its map coordinate is an approximate OpenStreetMap Photon geocode for the published Airoli address.
+    rows = [
+        ("Zeinith Multispeciality Hospital", "Parth Business Plaza, New Link Road, Mith Chowky, Orlem, Malad West, Mumbai, Maharashtra 400064", "022-28837863", 14, 4, 19.196729, 72.834163),
+        ("Savitri Bai Phule BMC Hospital", "Riddhi Garden Road, Malad East, Mumbai, Maharashtra 400097", "022-28492388", 28, 6, 19.1777529, 72.8724378),
+        ("Government General Hospital, Malwani Malad", "Bhoomi Park Road, Janakalyan Nagar, Malwani, Mumbai, Maharashtra 400095", "9869320123", 18, 4, 19.2007076, 72.8221715),
+        ("Ashoka General Hospital I.C.C.U and Maternity Home", "First Floor, Ashoka Palace, Makrani Pada, Matanpur Nagar, Malad East, Mumbai, Maharashtra 400097", "022-28775084", 14, 3, 19.1818080, 72.8531321),
+        ("Suvidha Hospital and Iccu", "No. 4, Neelam Apartments, near Triveni Nagar, Kokani Pada, Kurar, Malad East, Mumbai, Maharashtra 400097", "022-28431963", 10, 3, 19.198999, 72.866717),
+        ("SRV Hospital", "179/180, Road No. 2, Kamal Charan Building, Jawahar Nagar, Goregaon West, Mumbai, Maharashtra 400062", "022-68840000", 16, 5, 19.1589907, 72.8492265),
+        ("Life Line Medicare Hospital Pvt Ltd", "A/1, Gagan Chambers, near Gokuldham Medical Centre, Gokuldham, Goregaon East, Mumbai, Maharashtra 400063", "022-68478175", 12, 4, 19.1723310, 72.8684660),
+        ("Dr. Sabnis Hospital", "6A, Nivara Building, Naikwadi Road, Churi Wadi, Goregaon East, Mumbai, Maharashtra 400063", "9821140973", 10, 3, 19.1671157, 72.8513635),
+        ("Siddharth Municipal General Hospital", "Siddharth Municipal General Hospital, Lokmanya Tilak Road No. 5, New Siddharth Nagar, Goregaon West, Mumbai, Maharashtra 400104", "022-28766885", 20, 5, 19.1595728, 72.8403060),
+        ("Trauma Hospital", "I B Patel Road, Goregaon East, Mumbai, Maharashtra 400063", "", 12, 4, 19.1604330, 72.8562440),
+        ("National Burns Center", "Sector 13, Plot No. 1, Samarth Ramdas Swami Marg, Airoli, Navi Mumbai, Maharashtra 400078", "+91-22-27796660", 0, 0, 19.1533004, 72.9862292),
+    ]
+    existing_hospitals = {hospital.name: hospital for hospital in HospitalModel.query.all()}
+    for name, location, phone, beds, icu, lat, lng in rows:
+        verified = VERIFIED_HOSPITAL_CAPABILITIES.get(name, set())
+        hospital = existing_hospitals.get(name)
+        if hospital is None:
+            hospital = HospitalModel(
+                name=name, location=location, phone=phone,
+                status="Listed", ed_status="Call to confirm",
+                available_beds=beds, icu_beds=icu, lat=lat, lng=lng,
+                rating=None,
+                **{field: field in verified for field in HOSPITAL_CAPABILITY_FIELDS},
+            )
+            db.session.add(hospital)
+            existing_hospitals[name] = hospital
+        else:
+            # Backfill verified capabilities into existing databases without resetting admin edits.
+            for field in verified:
+                if not getattr(hospital, field, False):
+                    setattr(hospital, field, True)
 
     db.session.flush()
 
@@ -321,8 +367,23 @@ def seed_all():
         )
 
 
+def migrate_driver_approval_schema(engine=None):
+    engine = engine or db.engine
+    columns = {
+        column["name"]
+        for column in sqlalchemy_inspect(engine).get_columns(AmbulanceModel.__tablename__)
+    }
+    if "approval_status" not in columns:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                'ALTER TABLE "ambulance_model" '
+                "ADD COLUMN approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'"
+            )
+
+
 with app.app_context():
     db.create_all()
+    migrate_driver_approval_schema()
     seed_all()
 
 
@@ -361,6 +422,11 @@ def gps_age(a):
     if a.lat is None or a.lng is None or not a.updated_at:
         return None
     return (naive_now() - a.updated_at.replace(tzinfo=None)).total_seconds()
+
+
+def gps_age_seconds(a):
+    age = gps_age(a)
+    return max(0, int(age)) if age is not None else None
 
 
 def fresh(a, seconds=300):
@@ -404,7 +470,8 @@ def assign_ambulance(e):
     busy = busy_ids()
     free = [
         a for a in AmbulanceModel.query
-        if a.status != "Offline" and fresh(a) and a.id not in busy
+        if a.approval_status == "approved"
+        and a.status != "Offline" and fresh(a) and a.id not in busy
     ]
     if not free:
         return False
@@ -443,6 +510,7 @@ def ambulance_dict(a):
     return {
         "id": a.id, "vehicle_number": a.vehicle_number, "driver": a.driver,
         "phone": a.phone, "type": a.type, "status": a.status,
+        "approval_status": a.approval_status,
         "lat": a.lat, "lng": a.lng,
         "updated_at": a.updated_at.isoformat() if a.updated_at else None,
         "location_is_live": has_live_gps,
@@ -472,7 +540,10 @@ def emergency_dict(e):
         "ambulance_info": (
             {"id": a.id, "driver": a.driver, "phone": a.phone,
              "vehicle_number": a.vehicle_number, "type": a.type,
-             "status": a.status, "lat": a.lat, "lng": a.lng}
+             "status": a.status, "lat": a.lat, "lng": a.lng,
+             "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+             "gps_age_seconds": gps_age_seconds(a),
+             "location_is_live": fresh(a, seconds=20)}
             if a else None
         ),
         "eta": f"{e.eta_min} mins" if e.eta_min else None,
@@ -587,7 +658,8 @@ def current_driver():
     payload = bearer_payload()
     if not payload or payload.get("kind") != "driver":
         return None
-    return db.session.get(AmbulanceModel, payload.get("id"))
+    driver = db.session.get(AmbulanceModel, payload.get("id"))
+    return driver if driver and driver.approval_status == "approved" else None
 
 
 def require_driver(ambulance_id=None):
@@ -606,7 +678,8 @@ def emergency_access_role(emergency):
     if payload.get("kind") == "patient_emergency" and payload.get("id") == emergency.id:
         return "patient"
     if payload.get("kind") == "driver" and payload.get("id") == emergency.ambulance_id:
-        return "driver"
+        driver = db.session.get(AmbulanceModel, payload.get("id"))
+        return "driver" if driver and driver.approval_status == "approved" else None
     return None
 
 
@@ -1197,27 +1270,27 @@ def driver_register():
     d = request.get_json(silent=True) or {}
     name = (d.get("driver") or "").strip()
     phone = "".join(ch for ch in str(d.get("phone") or "") if ch.isdigit())[-10:]
-    vehicle = (d.get("vehicle_number") or "").strip().upper()
-    license_no = (d.get("license_number") or "").strip()
     pin = str(d.get("pin") or "")
-    if not all((name, phone, vehicle, license_no)) or len(phone) != 10 or not pin.isdigit() or not 6 <= len(pin) <= 12:
-        return jsonify({"success": False, "message": "Enter a name, 10-digit phone, vehicle, license number, and a numeric PIN of 6–12 digits."}), 400
+    if not name or len(phone) != 10 or not pin.isdigit() or not 6 <= len(pin) <= 12:
+        return jsonify({"success": False, "message": "Enter a name, 10-digit phone, and a numeric PIN of 6–12 digits."}), 400
     if AmbulanceModel.query.filter_by(phone=phone).first():
         return jsonify({"success": False, "message": "This phone number is already registered."}), 409
-    if AmbulanceModel.query.filter(db.func.lower(AmbulanceModel.vehicle_number) == vehicle.lower()).first():
-        return jsonify({"success": False, "message": "This vehicle is already registered."}), 409
+    vehicle = f"PENDING-{phone}"
     a = AmbulanceModel(
         driver=name, phone=phone, vehicle_number=vehicle,
         type=(d.get("type") or "BLS (Basic Life Support)"),
-        status="Available", pin_hash=generate_password_hash(pin),
-        license_number=license_no
+        status="Offline", pin_hash=generate_password_hash(pin),
+        license_number="", approval_status="pending"
     )
     db.session.add(a)
     db.session.commit()
-    token = signer.dumps({"kind": "driver", "id": a.id})
-    response = jsonify({"success": True, "driver": ambulance_dict(a), "token": token})
+    response = jsonify({
+        "success": True,
+        "message": "Registration received with name, phone and PIN only. You do not need to enter a license or vehicle number. An administrator completes verification and vehicle assignment before approving sign-in.",
+        "driver": ambulance_dict(a),
+    })
     response.headers["Cache-Control"] = "no-store"
-    return response, 201
+    return response, 202
 
 
 @app.route("/api/driver/login", methods=["POST"])
@@ -1235,7 +1308,21 @@ def driver_login():
         record_login_failure(ip)
         return jsonify({"success": False, "message": "Phone number or PIN is incorrect, or the driver has not registered."}), 401
     clear_login_failures(ip)
-    a.status = "Available"
+    if a.approval_status != "approved":
+        message = (
+            "Your request is pending. You do not need to enter a license or vehicle number; an administrator completes verification and assignment before you can sign in."
+            if a.approval_status == "pending"
+            else "This driver account is not approved. Contact RapidCare administration."
+        )
+        response = jsonify({"success": False, "message": message})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 403
+    has_active_case = EmergencyModel.query.filter(
+        EmergencyModel.ambulance_id == a.id,
+        EmergencyModel.status.in_(LIVE_CASE),
+    ).first()
+    if not has_active_case:
+        a.status = "Offline"
     db.session.commit()
     token = signer.dumps({"kind": "driver", "id": a.id})
     response = jsonify({"success": True, "driver": ambulance_dict(a), "token": token})
@@ -1421,7 +1508,7 @@ def admin_add_hospital():
 
 
 @app.route("/api/admin/hospitals/<int:hid>", methods=["PATCH"])
-def toggle_admin_hospital(hid):
+def update_admin_hospital(hid):
     staff, error = admin_required()
     if error:
         return error
@@ -1429,6 +1516,8 @@ def toggle_admin_hospital(hid):
     if not h:
         return jsonify({"success": False, "message": "Hospital not found"}), 404
     data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"success": False, "message": "Provide hospital updates as an object."}), 400
     if "lat" in data or "lng" in data:
         if ("lat" in data) != ("lng" in data):
             return jsonify({
@@ -1455,6 +1544,34 @@ def toggle_admin_hospital(hid):
         return jsonify({
             "success": True, "hospital": hospital_admin_dict(h)
         })
+    if any(key in data for key in ("general_beds", "available_beds", "icu_beds")):
+        if "general_beds" in data and "available_beds" in data:
+            return jsonify({"success": False, "message": "Provide general bed count once."}), 400
+        values = {}
+        for key, column in (
+            ("general_beds", "available_beds"),
+            ("available_beds", "available_beds"),
+            ("icu_beds", "icu_beds"),
+        ):
+            if key not in data:
+                continue
+            value = data[key]
+            if (
+                type(value) not in (int, float)
+                or not math.isfinite(value)
+                or int(value) != value
+                or value < 0
+                or value > 100000
+            ):
+                return jsonify({
+                    "success": False,
+                    "message": "General and ICU bed counts must be whole numbers from 0 to 100000.",
+                }), 400
+            values[column] = int(value)
+        for column, value in values.items():
+            setattr(h, column, value)
+        db.session.commit()
+        return jsonify({"success": True, "hospital": hospital_admin_dict(h)})
     h.active = not h.active
     h.status = "Listed" if h.active else "Not listed"
     db.session.commit()
@@ -1472,6 +1589,70 @@ def admin_fleet():
         ambulance_dict(a)
         for a in AmbulanceModel.query.order_by(AmbulanceModel.id)
     ])
+
+
+@app.route("/api/admin/driver-requests", methods=["GET"])
+def admin_driver_requests():
+    staff, error = admin_required()
+    if error:
+        return error
+    return jsonify([
+        {
+            **ambulance_dict(driver),
+            "vehicle_number": (
+                "Assign during approval"
+                if driver.vehicle_number.startswith("PENDING-")
+                else driver.vehicle_number
+            ),
+            "license_number": driver.license_number or "Verify during approval",
+        }
+        for driver in AmbulanceModel.query.filter_by(approval_status="pending")
+        .order_by(AmbulanceModel.id)
+    ])
+
+
+@app.route("/api/admin/driver-requests/<int:ambulance_id>", methods=["PATCH"])
+def admin_review_driver_request(ambulance_id):
+    staff, error = admin_required()
+    if error:
+        return error
+    driver = db.session.get(AmbulanceModel, ambulance_id)
+    if not driver:
+        return jsonify({"success": False, "message": "Driver request not found."}), 404
+    data = request.get_json(silent=True) or {}
+    decision = data.get("decision")
+    if decision not in {"approved", "rejected"}:
+        return jsonify({
+            "success": False,
+            "message": "Decision must be approved or rejected.",
+        }), 400
+    if driver.approval_status != "pending":
+        return jsonify({
+            "success": False,
+            "message": "This driver request has already been reviewed.",
+        }), 409
+    if decision == "approved":
+        vehicle = str(data.get("vehicle_number") or "").strip().upper()
+        license_no = str(data.get("license_number") or "").strip()
+        if not vehicle or not license_no or vehicle.startswith("PENDING-"):
+            return jsonify({
+                "success": False,
+                "message": "Enter the assigned vehicle number and verified license before approval.",
+            }), 400
+        if len(vehicle) > 50 or len(license_no) > 100:
+            return jsonify({"success": False, "message": "Vehicle or license number is too long."}), 400
+        duplicate_vehicle = AmbulanceModel.query.filter(
+            db.func.lower(AmbulanceModel.vehicle_number) == vehicle.lower(),
+            AmbulanceModel.id != driver.id,
+        ).first()
+        if duplicate_vehicle:
+            return jsonify({"success": False, "message": "This vehicle is already registered."}), 409
+        driver.vehicle_number = vehicle
+        driver.license_number = license_no
+    driver.approval_status = decision
+    driver.status = "Offline"
+    db.session.commit()
+    return jsonify({"success": True, "driver": ambulance_dict(driver)})
 
 
 @app.route("/api/admin/fleet", methods=["POST"])
@@ -1507,6 +1688,10 @@ def admin_update_ambulance(aid):
         return jsonify({"success": False, "message": "Ambulance not found"}), 404
     status = (request.get_json(silent=True) or {}).get("status")
     if status:
+        if status not in {"Available", "Offline"}:
+            return jsonify({"success": False, "message": "Status must be Available or Offline."}), 400
+        if status != "Offline" and a.approval_status != "approved":
+            return jsonify({"success": False, "message": "Approve this driver request before setting the unit online."}), 409
         a.status = status
         if status != "Offline":
             refresh_status(a)
@@ -1565,6 +1750,12 @@ def admin_reset():
         "success": False,
         "message": "Reset is disabled to protect facility records. Use Refresh Records to reload the shared directory."
     }), 410
+
+
+@app.route("/healthz", methods=["GET"])
+def health_check():
+    # Keep health checks database-free so they do not defeat Neon scale-to-zero.
+    return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":

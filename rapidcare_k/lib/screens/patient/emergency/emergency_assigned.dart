@@ -125,7 +125,7 @@ class _EmergencyAssignedScreenState extends State<EmergencyAssignedScreen> with 
     if (_id == null || _locationUpdateBusy || !widget.trackLiveLocation) return;
     _locationUpdateBusy = true;
     try {
-      final position = await getFreshLocation();
+      final position = await getFreshLocation(requestPermission: false);
       await api('/api/app/emergency/$_id/location', method: 'POST', body: {
         'lat': position.latitude,
         'lng': position.longitude,
@@ -281,6 +281,8 @@ class _EmergencyAssignedScreenState extends State<EmergencyAssignedScreen> with 
     final st = c['status'] as String;
     final idx = _order.indexOf(st);
     final amb = c['ambulance_info'] as Map?;
+    final gpsLive = amb?['location_is_live'] == true;
+    final gpsAge = amb?['gps_age_seconds'];
     final pat = latLngOf(c), ambPos = latLngOf(amb), hos = latLngOf(c['hospital_info']);
     final eta = _route != null ? '${_route!.min.round()} min' : (c['eta'] ?? '—');
 
@@ -332,39 +334,66 @@ class _EmergencyAssignedScreenState extends State<EmergencyAssignedScreen> with 
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade300)),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: FlutterMap(
-              mapController: _map,
-              options: MapOptions(
-                initialCenter: pat ?? ambPos ?? kRapidCareCoverageCenter,
-                initialZoom: 14,
-                interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
-                onMapReady: () {
-                  _ready = true;
-                  _fit();
-                },
-              ),
+            child: Stack(
               children: [
-                TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.rapidcare.app'),
-                if (_route != null) PolylineLayer(polylines: [Polyline(points: _route!.points, strokeWidth: 5, color: const Color(0xFF1976D2))]),
-                MarkerLayer(markers: [
-                  if (pat != null) Marker(point: pat, width: 40, height: 40, child: const Icon(Icons.person_pin_circle, color: _red, size: 38)),
-                  if (hos != null) Marker(point: hos, width: 40, height: 40, child: const Icon(Icons.local_hospital, color: Colors.blue, size: 30)),
-                  if (ambPos != null)
-                    Marker(
-                      point: ambPos,
-                      width: 44,
-                      height: 44,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00695C),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2.5),
-                          boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6)],
+                FlutterMap(
+                  mapController: _map,
+                  options: MapOptions(
+                    initialCenter: pat ?? ambPos ?? kRapidCareCoverageCenter,
+                    initialZoom: 14,
+                    interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+                    onMapReady: () {
+                      _ready = true;
+                      _fit();
+                    },
+                  ),
+                  children: [
+                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.rapidcare_k'),
+                    if (_route != null) PolylineLayer(polylines: [Polyline(points: _route!.points, strokeWidth: 5, color: const Color(0xFF1976D2))]),
+                    MarkerLayer(markers: [
+                      if (pat != null) Marker(point: pat, width: 40, height: 40, child: const Icon(Icons.person_pin_circle, color: _red, size: 38)),
+                      if (hos != null) Marker(point: hos, width: 40, height: 40, child: const Icon(Icons.local_hospital, color: Colors.blue, size: 30)),
+                      if (ambPos != null)
+                        Marker(
+                          point: ambPos,
+                          width: 44,
+                          height: 44,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: gpsLive ? const Color(0xFF00695C) : Colors.orange.shade700,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2.5),
+                              boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6)],
+                            ),
+                            child: const Icon(Icons.local_shipping, color: Colors.white, size: 22),
+                          ),
                         ),
-                        child: const Icon(Icons.local_shipping, color: Colors.white, size: 22),
+                    ]),
+                  ],
+                ),
+                if (amb != null)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: gpsLive ? Colors.green.shade50 : Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                      ),
+                      child: Text(
+                        gpsLive
+                            ? 'LIVE · updated ${gpsAge is num ? '${gpsAge.toInt()}s ago' : 'now'}'
+                            : 'GPS signal delayed${gpsAge is num ? ' · ${gpsAge.toInt()}s old' : ''}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: gpsLive ? Colors.green.shade900 : Colors.orange.shade900,
+                        ),
                       ),
                     ),
-                ]),
+                  ),
               ],
             ),
           ),

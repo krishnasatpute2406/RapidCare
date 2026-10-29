@@ -38,6 +38,7 @@ class _EmergencyHospitalsScreenState extends State<EmergencyHospitalsScreen> wit
   AnimationController(duration: const Duration(milliseconds: 800), vsync: this)..repeat(reverse: true);
   List<Map<String, dynamic>> _h = [];
   bool _loading = true;
+  bool _requestInFlight = false;
   String? _err;
   Timer? _t;
 
@@ -56,6 +57,8 @@ class _EmergencyHospitalsScreenState extends State<EmergencyHospitalsScreen> wit
   }
 
   Future<void> _load({bool silent = false}) async {
+    if (!mounted || _requestInFlight) return;
+    _requestInFlight = true;
     if (!silent) setState(() { _loading = true; _err = null; });
     try {
       final p = widget.patient;
@@ -63,23 +66,20 @@ class _EmergencyHospitalsScreenState extends State<EmergencyHospitalsScreen> wit
           '${p != null ? '&lat=${p.latitude}&lng=${p.longitude}' : ''}') as List;
       if (!mounted) return;
       final hospitals = r.map((e) => Map<String, dynamic>.from(e)).toList();
-      hospitals.sort((a, b) {
-        final byFit = _matchCount(b).compareTo(_matchCount(a));
-        if (byFit != 0) return byFit;
-        final aDistance = (a['distance_km'] as num?)?.toDouble() ?? double.infinity;
-        final bDistance = (b['distance_km'] as num?)?.toDouble() ?? double.infinity;
-        final byDistance = aDistance.compareTo(bDistance);
-        return byDistance != 0
-            ? byDistance
-            : '${a['name']}'.toLowerCase().compareTo('${b['name']}'.toLowerCase());
-      });
       setState(() {
         _h = hospitals;
         _loading = false;
         _err = null;
       });
     } catch (_) {
-      if (mounted && (!silent || _h.isEmpty)) setState(() { _loading = false; _err = 'Cannot reach the RapidCare server.'; });
+      if (mounted && (!silent || _h.isEmpty)) {
+        setState(() {
+          _loading = false;
+          _err = 'RapidCare may take about a minute to wake after inactivity. If you need immediate help, call 108.';
+        });
+      }
+    } finally {
+      _requestInFlight = false;
     }
   }
 
@@ -93,13 +93,14 @@ class _EmergencyHospitalsScreenState extends State<EmergencyHospitalsScreen> wit
             : fac[need[1]] == true;
     final specialistMatch = spec[need[0]] == true;
     final matches = (specialistMatch ? 1 : 0) + (serviceMatch ? 1 : 0);
+    final serviceLabel = need[1] == 'maternity_ot' ? 'Maternity OT' : need[1];
     return [
       if (h['distance_km'] != null) _bullet('About ${h['distance_km']} km away (straight-line distance)'),
-      if ((h['icu_beds'] ?? 0) > 0) _bullet('${h['icu_beds']} ICU beds', warn: true),
       if (specialistMatch) _bullet('${need[0]} listed'),
-      if (serviceMatch) _bullet(need[1] == 'maternity_ot' ? 'Maternity OT listed' : '${need[1]} listed'),
-      if (matches == 0) _bullet('No matching service is listed for this emergency type', warn: true),
-      if (matches == 1) _bullet('Only one of the two required capabilities is listed', warn: true),
+      if (serviceMatch) _bullet('$serviceLabel listed'),
+      if (!specialistMatch) _bullet('${need[0]} not confirmed in the directory', warn: true),
+      if (!serviceMatch) _bullet('$serviceLabel not confirmed in the directory', warn: true),
+      if (matches == 1) _bullet('Only one of the two required capabilities is confirmed; call to verify', warn: true),
       if (h['distance_km'] == null) _bullet('Distance unavailable; ordered by listed capabilities', warn: true),
       _bullet('Call to confirm emergency acceptance and capacity', warn: true),
     ];
@@ -241,7 +242,7 @@ class _EmergencyHospitalsScreenState extends State<EmergencyHospitalsScreen> wit
         const Divider(height: 16),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Flexible(
-            child: Text('${h['available_beds']} Beds • ${h['icu_beds']} ICU',
+            child: Text('Listed: ${h['available_beds']} beds • ${h['icu_beds']} ICU',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade700)),
           ),
           TextButton(

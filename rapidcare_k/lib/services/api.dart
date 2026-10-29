@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 /// Chrome: 127.0.0.1. Android emulator: 10.0.2.2.
-/// Physical phone: pass `--dart-define=API_BASE=http://<PC Wi-Fi IP>:5000`.
+/// Physical phone: pass API_BASE as a private Wi-Fi HTTP URL for development or a public HTTPS URL for a release build.
 const String _override = String.fromEnvironment('API_BASE');
 String? _apiToken;
 const LatLng kRapidCareCoverageCenter = LatLng(19.17, 72.85);
@@ -44,14 +44,14 @@ Future<dynamic> api(String path, {String method = 'GET', Map<String, dynamic>? b
             ? http.patch(u, headers: h, body: b)
             : http.post(u, headers: h, body: b);
     try {
-      r = await send().timeout(const Duration(seconds: 15));
+      r = await send().timeout(const Duration(seconds: 75));
     } on Exception {
       if (method != 'GET') rethrow;
       await Future<void>.delayed(const Duration(milliseconds: 350));
       r = await send().timeout(const Duration(seconds: 15));
     }
   } catch (e) {
-    throw Exception('Cannot reach RapidCare at $kApiBase. Check that Flask is running on port 5000 and that API_BASE points to this computer. ($e)');
+    throw Exception('Cannot reach RapidCare at $kApiBase. Check network access and the configured API_BASE. The public demo service may take about a minute to wake after inactivity. ($e)');
   }
   dynamic decoded;
   try {

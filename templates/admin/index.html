@@ -139,13 +139,17 @@ td small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.id{color:v
 
 <section id="v-hospitals" class="hide"><div class="card">
 <h3><i data-lucide="building-2" style="color:#0f766e"></i>Hospital Network Directory</h3>
-<p class="empty">Hospital addresses, map coordinates, and contact numbers are shared with the Hospital portal and Flutter app.</p>
+<p class="empty">Admin bed-count changes save to the shared RapidCare database. Patient hospital lists refresh these values every 10 seconds.</p>
 <div style="overflow-x:auto"><table><thead><tr><th>ID</th><th>Hospital</th><th>Phone</th><th>Admin-managed Coordinates</th><th class="r">General Beds</th><th class="r">ICU Beds</th><th>Status</th><th class="r">Action</th></tr></thead><tbody id="t-h"></tbody></table></div>
 </div><div class="card add"><h3>Add Hospital Facility</h3><div class="form"><input id="h-name" placeholder="Hospital Name"><input id="h-loc" placeholder="Full address"><input id="h-phone" placeholder="Phone number"><input id="h-lat" type="number" step="any" placeholder="Latitude"><input id="h-lng" type="number" step="any" placeholder="Longitude"><button class="btn b-pri" onclick="addHospital()">Add Hospital</button></div></div></section>
 
 <section id="v-fleet" class="hide"><div class="card">
 <h3><i data-lucide="truck" style="color:#0d9488"></i>Ambulance Fleet &amp; Drivers</h3>
 <div style="overflow-x:auto"><table><thead><tr><th>ID</th><th>Driver</th><th>Vehicle</th><th>Type</th><th>Status</th><th class="r">Duty Toggle</th></tr></thead><tbody id="t-f"></tbody></table></div>
+</div><div class="card">
+<h3><i data-lucide="user-check" style="color:#d97706"></i>Driver Sign-in Requests</h3>
+<p class="empty">Verify the driver's identity, driving licence, phone number, and vehicle authorization before approving access.</p>
+<div style="overflow-x:auto"><table><thead><tr><th>ID</th><th>Driver</th><th>Phone</th><th>Vehicle</th><th>Licence</th><th class="r">Review</th></tr></thead><tbody id="t-driver-requests"></tbody></table></div>
 </div><div class="card add"><h3>Add Ambulance Unit</h3><div class="form"><input id="f-name" placeholder="Driver Name"><input id="f-veh" value="MH-02-ER-9012"><button class="btn b-teal" onclick="addUnit()">Add Unit</button></div></div></section>
 
 <section id="v-emergencies" class="hide"><div class="card"><h3><i data-lucide="siren" style="color:#e11d48"></i>Active Emergency Logs</h3><div id="c-e"></div></div></section>
@@ -166,7 +170,7 @@ td small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.id{color:v
 
 <script>
 const API=location.port==='5000'?'':'http://127.0.0.1:5000',POLL_MS=5000,DEF=[19.1810,72.8510],TOKEN_KEY='rapidcare_admin_token',EXPIRED='Admin session expired. Please sign in again.';
-let S={hosp:[],fleet:[],emerg:[],reviews:[],stats:{}},tab='overview',map,layer,meMarker,me=null,tiles,token=null;
+let S={hosp:[],fleet:[],driverRequests:[],emerg:[],reviews:[],stats:{}},tab='overview',map,layer,meMarker,me=null,tiles,token=null;
 try{token=sessionStorage.getItem(TOKEN_KEY)}catch(e){}
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c])),icons=()=>window.lucide&&lucide.createIcons();
 const toast=m=>{const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)};
@@ -267,10 +271,10 @@ function render(){
   const st=S.stats,o=k=>st[k]??0,vals={h:o('active_hospitals'),a:o('ambulances_online'),i:o('total_icu_beds'),d:o('dispatches_in_transit')};
   Object.entries(vals).forEach(([k,v])=>$('st-'+k).textContent=v);
   $('n-h').textContent=vals.h+' Facilities';$('n-a').textContent=vals.a+' Live';$('n-i').textContent=vals.i+' ICU Beds';
-
-  $('t-h').innerHTML=S.hosp.map(h=>`<tr><td class="id">#${h.id}</td><td><b>${esc(h.name)}</b><small>${esc(h.location)}</small></td><td class="mono">${esc(h.phone||'No phone on file')}</td><td><div class="form" style="margin:0;flex-wrap:nowrap;gap:6px"><input id="h-lat-${h.id}" type="number" step="any" min="-90" max="90" aria-label="Latitude for ${esc(h.name)}" value="${h.lat==null?'':Number(h.lat)}" placeholder="Latitude" style="min-width:110px;width:110px;padding:7px"><input id="h-lng-${h.id}" type="number" step="any" min="-180" max="180" aria-label="Longitude for ${esc(h.name)}" value="${h.lng==null?'':Number(h.lng)}" placeholder="Longitude" style="min-width:110px;width:110px;padding:7px"><button class="sm" onclick="saveHospitalLocation(${h.id})">Save</button></div></td><td class="r"><b>${h.general_beds}</b></td><td class="r"><b style="color:var(--green)">${h.icu_beds}</b></td><td><span class="st ${hActive(h)?'':'off'}">${hActive(h)?'Enabled':'Disabled'}</span></td><td class="r"><button class="sm" onclick="toggleHospital(${h.id})">${hActive(h)?'Deactivate':'Activate'}</button></td></tr>`).join('');
+  $('t-h').innerHTML=S.hosp.map(h=>`<tr><td class="id">#${h.id}</td><td><b>${esc(h.name)}</b><small>${esc(h.location)}</small></td><td class="mono">${esc(h.phone||'No phone on file')}</td><td><div class="form" style="margin:0;flex-wrap:nowrap;gap:6px"><input id="h-lat-${h.id}" type="number" step="any" min="-90" max="90" aria-label="Latitude for ${esc(h.name)}" value="${h.lat==null?'':Number(h.lat)}" placeholder="Latitude" style="min-width:110px;width:110px;padding:7px"><input id="h-lng-${h.id}" type="number" step="any" min="-180" max="180" aria-label="Longitude for ${esc(h.name)}" value="${h.lng==null?'':Number(h.lng)}" placeholder="Longitude" style="min-width:110px;width:110px;padding:7px"><button class="sm" onclick="saveHospitalLocation(${h.id})">Save</button></div></td><td class="r"><input id="h-general-${h.id}" type="number" min="0" max="100000" step="1" aria-label="General beds for ${esc(h.name)}" value="${Number(h.general_beds??0)}" style="min-width:78px;width:78px;padding:7px;text-align:right"></td><td class="r"><input id="h-icu-${h.id}" type="number" min="0" max="100000" step="1" aria-label="ICU beds for ${esc(h.name)}" value="${Number(h.icu_beds??0)}" style="min-width:78px;width:78px;padding:7px;text-align:right"></td><td><span class="st ${hActive(h)?'':'off'}">${hActive(h)?'Enabled':'Disabled'}</span></td><td class="r"><div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><button class="sm" onclick="saveHospitalBeds(${h.id})">Save beds</button><button class="sm" onclick="toggleHospital(${h.id})">${hActive(h)?'Deactivate':'Activate'}</button></div></td></tr>`).join('');
 
   $('t-f').innerHTML=S.fleet.map(f=>{const off=f.status==='Offline';return `<tr><td class="id">#${f.id}</td><td><b>${esc(f.driver)}</b><small class="mono">${esc(f.phone||'')}</small></td><td class="mono"><b>${esc(f.vehicle_number)}</b></td><td>${esc(f.type||'ALS (Advanced Life Support)')}</td><td><span class="st ${off?'off':/route|busy/i.test(f.status)?'busy':''}">${esc(f.location_is_live?f.status:f.status_label)}</span></td><td class="r"><button class="sm" onclick="setUnit(${f.id},'${off?'Available':'Offline'}')">Set ${off?'Online':'Offline'}</button></td></tr>`}).join('');
+  $('t-driver-requests').innerHTML=S.driverRequests.length?S.driverRequests.map(d=>`<tr><td class="id">#${d.id}</td><td><b>${esc(d.driver)}</b></td><td class="mono">${esc(d.phone||'')}</td><td class="mono">${esc(d.vehicle_number||'')}</td><td>${esc(d.license_number||'')}</td><td class="r"><button class="sm" onclick="reviewDriver(${d.id},'approved')">Approve</button> <button class="sm" onclick="reviewDriver(${d.id},'rejected')">Reject</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No driver registrations are waiting for review.</td></tr>';
 
   $('c-e').innerHTML=S.emerg.length?S.emerg.map(e=>`<div class="ord"><div class="row"><b>${esc(e.code||'#'+e.id)}</b><span class="crit">${esc(e.triage_level||e.status||'Active')}</span></div><p><b>Patient:</b> ${esc(e.patient_name||'Unknown')} · <b>Type:</b> ${esc(e.emergency_type||'-')}</p><p><b>Hospital:</b> ${esc(e.hospital||'-')} · <b>ETA:</b> ${esc(e.eta||'-')}</p></div>`).join(''):'<p class="empty">No unassigned emergencies at the moment. All dispatches are routed.</p>';
   renderReviewQueue();drawTabs();drawMap();icons()
@@ -289,17 +293,30 @@ function renderReviewQueue(){
 
 async function refresh(){
   if(!token)return;const t=token;
-  let stats,hosp,fleet,emerg,reviews;
-  try{[stats,hosp,fleet,emerg,reviews]=await Promise.all(['stats','hospitals','fleet','emergencies','reviews'].map(k=>get('/api/admin/'+k)))}
+  let stats,hosp,fleet,driverRequests,emerg,reviews;
+  try{[stats,hosp,fleet,driverRequests,emerg,reviews]=await Promise.all([get('/api/admin/stats'),get('/api/admin/hospitals'),get('/api/admin/fleet'),get('/api/admin/driver-requests'),get('/api/admin/emergencies'),get('/api/admin/reviews')])}
   catch(e){if(e.auth)return;throw e}
   if(!token||token!==t)return;
   if(!stats&&!hosp)return;
-  S={stats:stats||S.stats,hosp:hosp||S.hosp,fleet:fleet||S.fleet,emerg:emerg||S.emerg,reviews:reviews||S.reviews};
+  S={stats:stats||S.stats,hosp:hosp||S.hosp,fleet:fleet||S.fleet,driverRequests:driverRequests||S.driverRequests,emerg:emerg||S.emerg,reviews:reviews||S.reviews};
   render()
 }
 const act=async(fn,msg)=>{try{await fn();toast(msg)}catch(e){toast('Failed: '+e.message)}await refresh()};
 const toggleHospital=id=>act(()=>api('/api/admin/hospitals/'+id,'PATCH'),'Hospital status updated');
 const setUnit=(id,status)=>act(()=>api('/api/admin/fleet/'+id,'PATCH',{status}),'Ambulance set '+status);
+async function reviewDriver(id,decision){
+  let payload={decision};
+  if(decision==='approved'){
+    const vehicle=window.prompt('Assign the verified vehicle registration number:');
+    if(!vehicle||!vehicle.trim())return;
+    const license=window.prompt('Enter the driving license number you verified:');
+    if(!license||!license.trim())return;
+    if(!window.confirm('Confirm you verified this driver and assigned this vehicle?'))return;
+    payload={decision,vehicle_number:vehicle.trim(),license_number:license.trim()};
+  }else if(!window.confirm('Reject this driver registration?'))return;
+  try{await api('/api/admin/driver-requests/'+id,'PATCH',payload);toast('Driver request '+decision)}catch(e){toast('Could not update driver request: '+e.message)}
+  await refresh()
+}
 
 function saveHospitalLocation(id){
   const latText=$('h-lat-'+id).value,lngText=$('h-lng-'+id).value;
@@ -307,6 +324,14 @@ function saveHospitalLocation(id){
   const lat=Number(latText),lng=Number(lngText);
   if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat < -90||lat > 90||lng < -180||lng > 180)return toast('Enter valid latitude (-90 to 90) and longitude (-180 to 180)');
   act(()=>api('/api/admin/hospitals/'+id,'PATCH',{lat,lng}),'Hospital coordinates updated');
+}
+
+function saveHospitalBeds(id){
+  const generalInput=$('h-general-'+id),icuInput=$('h-icu-'+id);
+  if(!generalInput.value.trim()||!icuInput.value.trim())return toast('Enter both general and ICU bed counts');
+  const general=Number(generalInput.value),icu=Number(icuInput.value);
+  if(!Number.isInteger(general)||!Number.isInteger(icu)||general<0||icu<0||general>100000||icu>100000)return toast('Use whole bed counts from 0 to 100000');
+  act(()=>api('/api/admin/hospitals/'+id,'PATCH',{general_beds:general,icu_beds:icu}),'Bed counts saved for all patient clients');
 }
 
 function addHospital(){

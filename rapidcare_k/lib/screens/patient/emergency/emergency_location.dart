@@ -94,8 +94,10 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
 
   bool _isLoadingLocation = true;
   bool _hasConfirmedLocation = false;
+  bool _hasLocationPreview = false;
   bool _isManualLocation = false;
   bool _locationRequestBusy = false;
+  bool _mapReady = false;
 
   LatLng _currentLatLng =
       kRapidCareCoverageCenter; // camera only until a fix or manual pin is chosen
@@ -136,6 +138,7 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
       if (mounted) {
         setState(() {
           _hasConfirmedLocation = false;
+          _hasLocationPreview = false;
           _isManualLocation = false;
           _accuracyMeters = null;
           _isLoadingLocation = true;
@@ -145,13 +148,27 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
 
       final Position position = await getFreshLocation(
         onPosition: (fix) {
-          if (!mounted || !_isLoadingLocation) return;
+          if (!mounted || !_isLoadingLocation || _isManualLocation) return;
+          final point = LatLng(fix.latitude, fix.longitude);
+          final shouldUpdate = !_hasLocationPreview ||
+              fix.accuracy <= (_accuracyMeters ?? double.infinity);
+          if (!shouldUpdate) return;
           setState(() {
-            _latLngText =
-            'GPS fix received (±${fix.accuracy.round()} m); checking for a better fix…';
+            _currentLatLng = point;
+            _currentAddress = _nearestArea(point);
+            _accuracyMeters = fix.accuracy;
+            _hasLocationPreview = true;
+            _hasConfirmedLocation = false;
+            _latLngText = 'GPS preview (±${fix.accuracy.round()} m); checking for a more precise fix…';
           });
+          if (_mapReady) {
+            try {
+              _mapController.move(point, 15.0);
+            } catch (_) {}
+          }
         },
       );
+      if (_isManualLocation) return;
 
       final fetchedLatLng = LatLng(position.latitude, position.longitude);
       final latLngFormatted =
@@ -166,6 +183,7 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
         _currentAddress = areaName;
         _latLngText = '$latLngFormatted\n$accuracyNotice';
         _isLoadingLocation = false;
+        _hasLocationPreview = false;
         _hasConfirmedLocation = true;
         _isManualLocation = false;
         _accuracyMeters = position.accuracy;
@@ -173,7 +191,11 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
       widget.onLatLngChanged?.call(fetchedLatLng);
       widget.onManualLocationChanged?.call(false);
       widget.onLocationChanged('$areaName ($latLngFormatted)');
-      _mapController.move(fetchedLatLng, 15.0);
+      if (_mapReady) {
+        try {
+          _mapController.move(fetchedLatLng, 15.0);
+        } catch (_) {}
+      }
 
       try {
         final placemarks = await geo.Geocoding()
@@ -352,10 +374,18 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
                         FlutterMap(
                           mapController: _mapController,
                           options: MapOptions(
-                            initialCenter: _hasConfirmedLocation
+                            initialCenter: _hasConfirmedLocation || _hasLocationPreview
                                 ? _currentLatLng
                                 : kRapidCareCoverageCenter,
                             initialZoom: 15.0,
+                            onMapReady: () {
+                              _mapReady = true;
+                              if (_hasConfirmedLocation || _hasLocationPreview) {
+                                try {
+                                  _mapController.move(_currentLatLng, 15.0);
+                                } catch (_) {}
+                              }
+                            },
                             onTap: (_, point) => _setMapPickupPoint(point),
                           ),
                           children: [
@@ -367,16 +397,18 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
 
                             MarkerLayer(
                               markers: [
-                                if (_hasConfirmedLocation)
+                                if (_hasConfirmedLocation || _hasLocationPreview)
                                   Marker(
                                     point: _currentLatLng,
                                     width: 80,
                                     height: 80,
-                                    child: const Column(
+                                    child: Column(
                                       children: [
                                         Icon(
                                           Icons.location_pin,
-                                          color: Color(0xFFD32F2F),
+                                          color: _hasLocationPreview
+                                              ? Colors.orange
+                                              : const Color(0xFFD32F2F),
                                           size: 36,
                                         ),
                                       ],
@@ -411,11 +443,13 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
                                 ],
                               ),
                               child: Text(
-                                _isLoadingLocation
-                                    ? 'Locating...'
-                                    : _hasConfirmedLocation
-                                    ? _currentAddress
-                                    : 'Approximate map point · tap to set pickup',
+                                _hasLocationPreview
+                                    ? 'GPS preview · verifying current position…'
+                                    : _isLoadingLocation
+                                        ? 'Locating...'
+                                        : _hasConfirmedLocation
+                                            ? _currentAddress
+                                            : 'Approximate map point · tap to set pickup',
                                 style: const TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500,
@@ -438,6 +472,7 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
                               _mapButton(
                                 Icons.add,
                                 onPressed: () {
+                                  if (!_mapReady) return;
                                   final double zoom =
                                       _mapController.camera.zoom + 1;
 
@@ -453,6 +488,7 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
                               _mapButton(
                                 Icons.remove,
                                 onPressed: () {
+                                  if (!_mapReady) return;
                                   final double zoom =
                                       _mapController.camera.zoom - 1;
 
@@ -520,9 +556,11 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
                       const SizedBox(height: 6),
 
                       Text(
-                        _isLoadingLocation
-                            ? 'Getting your current GPS position…'
-                            : _currentAddress,
+                        _hasLocationPreview
+                            ? 'Current GPS preview · checking for a more precise fix…'
+                            : _isLoadingLocation
+                                ? 'Getting your current GPS position…'
+                                : _currentAddress,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
@@ -548,8 +586,10 @@ class _EmergencyLocationScreenState extends State<EmergencyLocationScreen>
                             _isManualLocation
                                 ? 'Manual map pin'
                                 : (_hasConfirmedLocation
-                                ? 'Live GPS fix'
-                                : 'Location not confirmed'),
+                                    ? 'Live GPS fix'
+                                    : _hasLocationPreview
+                                        ? 'GPS preview only'
+                                        : 'Location not confirmed'),
                           ),
                           const SizedBox(width: 8),
                           _locationChip(

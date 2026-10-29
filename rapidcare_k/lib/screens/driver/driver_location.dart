@@ -64,13 +64,17 @@ class _DriverLocationScreenState extends State<DriverLocationScreen> {
   bool _sendingGps = false;
   String?
   _fitKey; // camera is re-fitted only when the case or its status changes
+  bool _fitPending = false;
 
   @override
   void initState() {
     super.initState();
     _sendGps();
     _poll();
-    _gpsT = Timer.periodic(const Duration(seconds: 4), (_) => _sendGps());
+    _gpsT = Timer.periodic(
+      const Duration(seconds: 4),
+      (_) => _sendGps(requestPermission: false),
+    );
     _pollT = Timer.periodic(const Duration(seconds: 3), (_) => _poll());
   }
 
@@ -83,13 +87,14 @@ class _DriverLocationScreenState extends State<DriverLocationScreen> {
 
   /// Sends this ambulance's live position. This is also what makes the ambulance "online"
   /// for dispatch, and it is what the patient's map shows.
-  Future<void> _sendGps() async {
+  Future<void> _sendGps({bool requestPermission = true}) async {
     if (_sendingGps) return;
     _sendingGps = true;
     LatLng me;
     double accuracy;
     try {
       final pos = await getFreshLocation(
+        requestPermission: requestPermission,
         onPosition: (fix) {
           if (!mounted) return;
           setState(() {
@@ -130,6 +135,9 @@ class _DriverLocationScreenState extends State<DriverLocationScreen> {
       try {
         _map.move(me, 15);
       } catch (_) {}
+    }
+    if (_fitPending && _case != null) {
+      _fitPending = !_fit(_target(_case!));
     }
     try {
       await api(
@@ -182,6 +190,7 @@ class _DriverLocationScreenState extends State<DriverLocationScreen> {
       final changed = key != _fitKey;
       if (changed) {
         _fitKey = key;
+        _fitPending = true;
         _tick = 0;
         setState(() => _route = null); // new leg of the trip: drop the old line
       }
@@ -189,7 +198,9 @@ class _DriverLocationScreenState extends State<DriverLocationScreen> {
         final rt = await roadRoute(_me!, target);
         if (mounted && rt != null) setState(() => _route = rt);
       }
-      if (changed) _fit(target);
+      if (changed || _fitPending) {
+        _fitPending = !_fit(target);
+      }
     } catch (_) {
       if (mounted) setState(() => _connErr = true);
     } finally {
@@ -197,8 +208,8 @@ class _DriverLocationScreenState extends State<DriverLocationScreen> {
     }
   }
 
-  void _fit(LatLng? target) {
-    if (!_ready || _me == null || target == null) return;
+  bool _fit(LatLng? target) {
+    if (!_ready || _me == null || target == null) return false;
     try {
       _map.fitCamera(
         CameraFit.bounds(
@@ -206,7 +217,10 @@ class _DriverLocationScreenState extends State<DriverLocationScreen> {
           padding: const EdgeInsets.all(56),
         ),
       );
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _advance(String status) async {
@@ -392,13 +406,16 @@ class _DriverLocationScreenState extends State<DriverLocationScreen> {
                         _centered = true;
                         _map.move(_me!, 15);
                       }
+                      if (_fitPending && _case != null) {
+                        _fitPending = !_fit(_target(_case!));
+                      }
                     },
                   ),
                   children: [
                     TileLayer(
                       urlTemplate:
                           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.rapidcare.app',
+                      userAgentPackageName: 'com.example.rapidcare_k',
                     ),
                     if (_route != null)
                       PolylineLayer(
@@ -492,7 +509,10 @@ class _DriverLocationScreenState extends State<DriverLocationScreen> {
                     heroTag: 'driver_recenter',
                     backgroundColor: const Color(0xFF004D40),
                     onPressed: () {
-                      if (_me == null) return;
+                      if (_me == null) {
+                        _sendGps(requestPermission: true);
+                        return;
+                      }
                       final t = c == null ? null : _target(c);
                       if (t != null) {
                         _fit(t);

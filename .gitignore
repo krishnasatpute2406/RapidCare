@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+.venv/
 *.db
 *.sqlite
 *.sqlite3
@@ -30,3 +31,8 @@ BACKUP-INFO.txt
 build/
 coverage/
 .gradle/
+.kotlin/
+/outputs/
+
+# Manus working files
+.work/

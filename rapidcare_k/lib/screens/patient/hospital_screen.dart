@@ -23,6 +23,7 @@ class Hospital {
   final int reviewCount;
   final int? etaMin;
   final int beds, icu, score;
+  final int? capabilityMatches;
   final List<String> specialists, facilities, units;
 
   Hospital({
@@ -40,6 +41,7 @@ class Hospital {
     required this.beds,
     required this.icu,
     required this.score,
+    required this.capabilityMatches,
     required this.specialists,
     required this.facilities,
     required this.units,
@@ -65,6 +67,7 @@ class Hospital {
       beds: j['available_beds'] ?? 0,
       icu: j['icu_beds'] ?? 0,
       score: j['score'] ?? 0,
+      capabilityMatches: (j['capability_matches'] as num?)?.toInt(),
       specialists: on(j['specialists']),
       facilities: on(j['facilities']),
       units: on(j['units']),
@@ -96,6 +99,9 @@ class _HospitalScreenState extends State<HospitalScreen> {
   String? _error;
 
   String _type = 'Any', _view = 'Map & List', _q = '';
+  int _loadGeneration = 0;
+  String _loadedType = 'other';
+  bool _pendingMapFit = true;
 
   List<LatLng> _route = [];
   double? _routeKm, _routeMin;
@@ -117,19 +123,47 @@ class _HospitalScreenState extends State<HospitalScreen> {
   }
 
   Future<void> _start() async {
-    await _locate();
+    final locationRequest = _locate();
     await _load();
+    if (!mounted) return;
     // Beds / ICU / ED status are edited in the hospital portal, so refresh regularly.
     _timer = Timer.periodic(const Duration(seconds: 10), (_) => _load(silent: true));
     _locationTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
-      await _locate();
+      await _locate(requestPermission: false);
       await _load(silent: true);
     });
+    final foundLocation = await locationRequest;
+    if (foundLocation && mounted) {
+      await _load(silent: true, selectTop: true, focusMap: true);
+    }
   }
 
-  Future<bool> _locate() async {
+  Future<bool> _locate({bool requestPermission = true}) async {
     try {
-      final pos = await getFreshLocation();
+      var alreadyHadFix = _gps;
+      final pos = await getFreshLocation(
+        requestPermission: requestPermission,
+        onPosition: (fix) {
+          if (!mounted) return;
+          final point = LatLng(fix.latitude, fix.longitude);
+          final firstFix = !alreadyHadFix;
+          if (!firstFix && fix.accuracy >= (_gpsAccuracy ?? double.infinity)) return;
+          setState(() {
+            _user = point;
+            _gps = true;
+            _gpsAccuracy = fix.accuracy;
+          });
+          alreadyHadFix = true;
+          if (firstFix && _mapReady) {
+            try {
+              _map.move(point, 14);
+            } catch (_) {}
+          }
+          if (firstFix) {
+            unawaited(_load(silent: true, selectTop: true, focusMap: true));
+          }
+        },
+      );
       if (!mounted) return false;
       setState(() {
         _user = LatLng(pos.latitude, pos.longitude);
@@ -143,31 +177,38 @@ class _HospitalScreenState extends State<HospitalScreen> {
     }
   }
 
-  Future<void> _load({bool silent = false}) async {
+  Future<void> _load({bool silent = false, bool selectTop = false, bool focusMap = false}) async {
+    final generation = ++_loadGeneration;
+    if (focusMap) _pendingMapFit = true;
+    final requestedType = _type == 'Any' ? 'other' : _type.toLowerCase();
     if (!silent) setState(() { _loading = true; _error = null; });
     try {
-      final requestedType = _type == 'Any' ? 'other' : _type.toLowerCase();
       final query = <String, String>{
         'type': requestedType,
       };
       if (_gps) { query['lat'] = '${_user.latitude}'; query['lng'] = '${_user.longitude}'; }
       final result = await api('/api/app/hospitals${Uri(queryParameters: query)}');
       final list = (result as List).map((e) => Hospital.fromJson(e)).toList();
+      if (!mounted || generation != _loadGeneration || requestedType != (_type == 'Any' ? 'other' : _type.toLowerCase())) return;
+      _loadedType = requestedType;
       list.sort((a, b) {
         final byFit = _matchCount(b, requestedType).compareTo(_matchCount(a, requestedType));
         if (byFit != 0) return byFit;
         final byDistance = (a.distanceKm ?? double.infinity).compareTo(b.distanceKm ?? double.infinity);
         return byDistance != 0 ? byDistance : a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
-      if (!mounted) return;
+      final selected = selectTop || _sel == null
+          ? (list.isNotEmpty ? list.first : null)
+          : list.where((h) => h.id == _sel?.id).firstOrNull ?? (list.isNotEmpty ? list.first : null);
       setState(() {
         _all = list;
-        _sel = list.where((h) => h.id == _sel?.id).firstOrNull ?? (list.isNotEmpty ? list.first : null);
+        _sel = selected;
         _loading = false;
         _error = null;
       });
+      if (_pendingMapFit) _focusRecommendations();
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _loading = false;
         if (!silent || _all.isEmpty) _error = 'Cannot reach the RapidCare server ($kApiBase). Check Flask and the app API address.';
@@ -176,16 +217,17 @@ class _HospitalScreenState extends State<HospitalScreen> {
   }
 
   int _matchCount(Hospital hospital, String type) {
+    if (_loadedType == type && hospital.capabilityMatches != null) return hospital.capabilityMatches!;
     final needs = switch (type) {
       'cardiac' => ('Cardiologist', '24x7 Cath Lab'),
       'trauma' || 'accident' => ('Orthopaedic', 'Emergency Physician'),
-      'burn' => ('Plastic & Burn Surgeon', 'Burn Isolation Ward'),
+      'burn' => ('Plastic & Burn Surgeon', 'burn_unit'),
       'pregnancy' => ('Obstetrician & Gynecologist', 'maternity_ot'),
       _ => ('Emergency Physician', 'CT / MRI'),
     };
     final specialist = hospital.specialists.contains(needs.$1);
     final service = switch (needs.$2) {
-      'maternity_ot' => hospital.units.contains('maternity_ot'),
+      'maternity_ot' || 'burn_unit' => hospital.units.contains(needs.$2),
       'Emergency Physician' => hospital.specialists.contains('Emergency Physician'),
       _ => hospital.facilities.contains(needs.$2),
     };
@@ -193,6 +235,7 @@ class _HospitalScreenState extends State<HospitalScreen> {
   }
 
   String _fitExplanation(Hospital hospital) {
+    if (hospital.recommendationReasons.isNotEmpty) return hospital.recommendationReasons.first;
     final matches = _matchCount(hospital, _type == 'Any' ? 'other' : _type.toLowerCase());
     if (matches == 2) return 'Required specialist and service are listed';
     if (matches == 1) return 'One required capability is listed; the other is not recorded';
@@ -212,6 +255,25 @@ class _HospitalScreenState extends State<HospitalScreen> {
     try {
       _map.fitCamera(CameraFit.bounds(bounds: LatLngBounds.fromPoints(pts), padding: const EdgeInsets.all(48)));
     } catch (_) {}
+  }
+
+  void _focusRecommendations() {
+    if (!_mapReady || _all.isEmpty) {
+      _pendingMapFit = true;
+      return;
+    }
+    final type = _type == 'Any' ? 'other' : _type.toLowerCase();
+    final located = _visible.where((h) => h.pos != null).toList();
+    final complete = located.where((h) => _matchCount(h, type) == 2).take(4).toList();
+    final partial = located.where((h) => _matchCount(h, type) == 1).take(4).toList();
+    final targets = complete.isNotEmpty ? complete : (partial.isNotEmpty ? partial : located.take(4).toList());
+    final points = <LatLng>[if (_gps) _user, ...targets.map((h) => h.pos!)];
+    if (points.length > 1) {
+      _fit(points);
+    } else if (points.length == 1) {
+      try { _map.move(points.first, 13); } catch (_) {}
+    }
+    _pendingMapFit = false;
   }
 
   /// Select a hospital and draw the real driving route (OSRM, no API key needed).
@@ -278,6 +340,7 @@ class _HospitalScreenState extends State<HospitalScreen> {
         ),
         body: Stack(children: [
           _buildMap(c, full: true, onPick: () => Navigator.pop(ctx)),
+          Positioned(left: 12, top: 12, child: _mapLegend()),
           Positioned(
             bottom: 24,
             right: 24,
@@ -308,7 +371,11 @@ class _HospitalScreenState extends State<HospitalScreen> {
         onMapReady: () {
           if (!full) {
             _mapReady = true;
-            if (_route.isNotEmpty) _fit(_route);
+            if (_pendingMapFit) {
+              _focusRecommendations();
+            } else if (_route.isNotEmpty) {
+              _fit(_route);
+            }
           }
         },
       ),
@@ -325,6 +392,8 @@ class _HospitalScreenState extends State<HospitalScreen> {
           ),
           ..._visible.where((h) => h.pos != null).map((h) {
             final selected = _sel?.id == h.id;
+            final matches = _matchCount(h, _type == 'Any' ? 'other' : _type.toLowerCase());
+            final markerColor = matches == 2 ? _teal : matches == 1 ? Colors.orange.shade800 : Colors.blueGrey.shade600;
             return Marker(
               point: h.pos!,
               width: 48,
@@ -336,9 +405,9 @@ class _HospitalScreenState extends State<HospitalScreen> {
                 },
                 child: Container(
                   decoration: BoxDecoration(
-                    color: selected ? const Color(0xFFC2185B) : (h.limited ? Colors.orange : Colors.red),
+                    color: markerColor,
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2.5),
+                    border: Border.all(color: selected ? Colors.amber : Colors.white, width: selected ? 4 : 2.5),
                     boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6)],
                   ),
                   child: const Icon(Icons.local_hospital, color: Colors.white, size: 24),
@@ -356,6 +425,28 @@ class _HospitalScreenState extends State<HospitalScreen> {
     decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
     child: Text(text, style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.bold)),
   );
+
+  Widget _legendItem(Color color, String text) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 9, height: 9, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text(text, style: const TextStyle(fontSize: 10, color: Color(0xFF23332E))),
+      ]);
+
+  Widget _mapLegend() => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.94),
+          borderRadius: BorderRadius.circular(9),
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 5)],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          _legendItem(_teal, '2/2 listed capabilities'),
+          const SizedBox(height: 4),
+          _legendItem(Colors.orange.shade800, '1/2 listed'),
+          const SizedBox(height: 4),
+          _legendItem(Colors.blueGrey.shade600, 'No listed match'),
+        ]),
+      );
 
   Widget _stat(String label, String value, Color color) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -570,14 +661,16 @@ class _HospitalScreenState extends State<HospitalScreen> {
                           selectedColor: _teal,
                           showCheckmark: false,
                           onSelected: (_) {
+                            if (_type == t) return;
                             setState(() {
                               _type = t;
                               _sel = null;
                               _route = [];
                               _routeKm = null;
                               _routeMin = null;
+                              _pendingMapFit = true;
                             });
-                            _load();
+                            _load(selectTop: true, focusMap: true);
                           },
                         ),
                       ))
@@ -629,6 +722,7 @@ class _HospitalScreenState extends State<HospitalScreen> {
                             borderRadius: BorderRadius.circular(16),
                             child: Stack(children: [
                               _buildMap(_map),
+                              Positioned(left: 10, top: 10, child: _mapLegend()),
                               Positioned(
                                 top: 10,
                                 right: 10,
@@ -651,9 +745,14 @@ class _HospitalScreenState extends State<HospitalScreen> {
                                 child: FloatingActionButton.small(
                                   heroTag: 'relocate_hospital_map_btn',
                                   backgroundColor: _tealDark,
-                                  onPressed: () {
+                                  onPressed: () async {
+                                    if (!_gps) {
+                                      final found = await _locate();
+                                      if (found) await _load(silent: true);
+                                    }
+                                    if (!mounted) return;
                                     try {
-                                  _map.move(_gps ? _user : kRapidCareCoverageCenter, 14);
+                                      _map.move(_gps ? _user : kRapidCareCoverageCenter, 14);
                                     } catch (_) {}
                                   },
                                   child: const Icon(Icons.my_location, color: Colors.white, size: 20),
@@ -665,6 +764,22 @@ class _HospitalScreenState extends State<HospitalScreen> {
                         const SizedBox(height: 16),
                         if (_sel != null) _card(_sel!),
                       ],
+                      if (_type != 'Any' && _all.isNotEmpty &&
+                          !_all.any((h) => _matchCount(h, _type.toLowerCase()) == 2))
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF4E5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFFFD59A)),
+                          ),
+                          child: Text(
+                            'No hospital in the current directory lists both required capabilities for $_type. Matches are directory listings, not confirmed availability; call to verify.',
+                            style: const TextStyle(color: Color(0xFF6A4300), fontSize: 12, height: 1.35),
+                          ),
+                        ),
                       if (_view != 'Map View') ...[
                         const Text('Hospital Directory & ER Availability',
                             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _tealDark)),

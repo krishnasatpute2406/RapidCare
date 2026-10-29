@@ -3,68 +3,41 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
-/// Returns a recent, usable device fix. Throws a readable error if location
-/// services, permission, GPS accuracy, or the fix itself is unavailable.
+/// Returns the freshest valid device fix available to the app.
+///
+/// Permission is requested automatically for explicit user actions. Background
+/// polling can pass requestPermission=false so it never repeatedly opens a
+/// permission prompt. Approximate Android permission is accepted because it is
+/// still a valid coordinate and must not block emergency dispatch.
 Future<Position> getFreshLocation({
   Duration timeout = const Duration(seconds: 20),
   double maxAccuracyMeters = kIsWeb ? 500 : 100,
   void Function(Position position)? onPosition,
+  bool requestPermission = true,
 }) async {
-  if (!await Geolocator.isLocationServiceEnabled().timeout(
-    const Duration(seconds: 5),
-  )) {
-    throw Exception('Turn on device location services and try again.');
-  }
-  var permission = await Geolocator.checkPermission().timeout(
-    const Duration(seconds: 5),
-  );
-  if (permission == LocationPermission.denied) {
-    permission = await Geolocator.requestPermission().timeout(
-      const Duration(seconds: 10),
-    );
-  }
-  if (permission == LocationPermission.deniedForever) {
-    throw Exception(
-      'Location permission is blocked. Allow it in app or browser settings.',
-    );
-  }
-  if (permission == LocationPermission.denied) {
-    throw Exception('Allow location access to use live location.');
-  }
-  if (!kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS)) {
-    final accuracy = await Geolocator.getLocationAccuracy().timeout(
-      const Duration(seconds: 5),
-    );
-    if (accuracy == LocationAccuracyStatus.reduced) {
-      throw Exception(
-        'Precise location is turned off for RapidCare. Enable Precise location '
-        'in the app permissions, then retry.',
-      );
-    }
+  await _ensureLocationAccess(requestPermission: requestPermission);
+
+  final settings = _locationSettings();
+
+  // Fast path: ask the platform for its best available current fix.
+  try {
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: settings,
+    ).timeout(timeout);
+    _validatePosition(position);
+    onPosition?.call(position);
+    return position;
+  } catch (_) {
+    // Fall through to a stream because providers often need extra startup time.
   }
 
-  LocationSettings locationSettings = const LocationSettings(
-    accuracy: LocationAccuracy.bestForNavigation,
-    distanceFilter: 0,
-  );
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    locationSettings = AndroidSettings(
-      accuracy: LocationAccuracy.bestForNavigation,
-      distanceFilter: 0,
-      intervalDuration: Duration(seconds: 1),
-    );
-  }
-  final fixes = Geolocator.getPositionStream(
-    locationSettings: locationSettings,
-  );
+  // Fallback: keep listening until a valid fix arrives. This helps when the
+  // first current-position request races with Android/iOS provider startup.
   final result = Completer<Position>();
-  final stopwatch = Stopwatch()..start();
-  Position? best;
+  final fixes = Geolocator.getPositionStream(locationSettings: settings);
   StreamSubscription<Position>? subscription;
   Timer? timeoutTimer;
-  Timer? refinementTimer;
+  Position? best;
 
   void finish() {
     if (!result.isCompleted && best != null) result.complete(best);
@@ -72,33 +45,18 @@ Future<Position> getFreshLocation({
 
   subscription = fixes.listen(
     (position) {
-      final age = DateTime.now().difference(position.timestamp);
-      if (age > const Duration(minutes: 2) ||
-          age < const Duration(seconds: -30) ||
-          !position.latitude.isFinite ||
-          !position.longitude.isFinite ||
-          position.latitude < -90 ||
-          position.latitude > 90 ||
-          position.longitude < -180 ||
-          position.longitude > 180 ||
-          !position.accuracy.isFinite ||
-          position.accuracy < 0) {
+      try {
+        _validatePosition(position);
+      } catch (_) {
         return;
       }
-
       onPosition?.call(position);
       if (best == null || position.accuracy < best!.accuracy) {
         best = position;
       }
-
-      // Keep sampling briefly after a usable fix so a later reading can be more precise.
-      if (stopwatch.elapsed >= const Duration(seconds: 4) &&
-          best!.accuracy <= maxAccuracyMeters) {
-        finish();
-      } else if (best!.accuracy <= maxAccuracyMeters &&
-          refinementTimer == null) {
-        refinementTimer = Timer(const Duration(seconds: 4), finish);
-      }
+      // Return promptly for emergency use, while preferring a reasonably
+      // accurate reading when one is available.
+      if (position.accuracy <= maxAccuracyMeters) finish();
     },
     onError: (Object error, StackTrace stackTrace) {
       if (!result.isCompleted) result.completeError(error, stackTrace);
@@ -112,8 +70,8 @@ Future<Position> getFreshLocation({
     } else {
       result.completeError(
         Exception(
-          'No fresh GPS fix arrived within ${timeout.inSeconds} seconds. '
-          'Check location permission and precise-location settings, then move outdoors or near a window and retry.',
+          'No GPS fix arrived within ${timeout.inSeconds} seconds. '
+          'Turn on device location and allow RapidCare location access, then retry.',
         ),
       );
     }
@@ -123,7 +81,78 @@ Future<Position> getFreshLocation({
     return await result.future;
   } finally {
     timeoutTimer.cancel();
-    refinementTimer?.cancel();
     await subscription.cancel();
+  }
+}
+
+Future<void> _ensureLocationAccess({required bool requestPermission}) async {
+  final enabled = await Geolocator.isLocationServiceEnabled().timeout(
+    const Duration(seconds: 5),
+  );
+  if (!enabled) {
+    throw Exception('Turn on device location services and try again.');
+  }
+
+  var permission = await Geolocator.checkPermission().timeout(
+    const Duration(seconds: 5),
+  );
+  if (permission == LocationPermission.denied ||
+      permission == LocationPermission.unableToDetermine) {
+    if (!requestPermission) {
+      throw Exception('Allow location access to use automatic live GPS.');
+    }
+    permission = await Geolocator.requestPermission().timeout(
+      const Duration(seconds: 10),
+    );
+  }
+  if (permission == LocationPermission.deniedForever) {
+    throw Exception(
+      'Location permission is blocked. Allow location access for RapidCare '
+      'in app or browser settings.',
+    );
+  }
+  if (permission == LocationPermission.denied ||
+      permission == LocationPermission.unableToDetermine) {
+    throw Exception('Allow location access to use automatic live GPS.');
+  }
+  // Do not reject reduced/approximate Android accuracy. It is still usable.
+}
+
+LocationSettings _locationSettings() {
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    return AndroidSettings(
+      accuracy: LocationAccuracy.best,
+      distanceFilter: 0,
+      intervalDuration: const Duration(seconds: 1),
+      forceLocationManager: false,
+    );
+  }
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+    return AppleSettings(
+      accuracy: LocationAccuracy.best,
+      distanceFilter: 0,
+      pauseLocationUpdatesAutomatically: false,
+      activityType: ActivityType.fitness,
+    );
+  }
+  return const LocationSettings(
+    accuracy: LocationAccuracy.best,
+    distanceFilter: 0,
+  );
+}
+
+void _validatePosition(Position position) {
+  final age = DateTime.now().difference(position.timestamp);
+  if (age > const Duration(minutes: 2) ||
+      age < const Duration(seconds: -30) ||
+      !position.latitude.isFinite ||
+      !position.longitude.isFinite ||
+      position.latitude < -90 ||
+      position.latitude > 90 ||
+      position.longitude < -180 ||
+      position.longitude > 180 ||
+      !position.accuracy.isFinite ||
+      position.accuracy < 0) {
+    throw Exception('The device returned an invalid GPS fix.');
   }
 }

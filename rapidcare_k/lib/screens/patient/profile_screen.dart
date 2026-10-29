@@ -296,6 +296,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
+            TextButton(
+              onPressed: _busy ? null : () => Navigator.of(context).maybePop(),
+              child: const Text('Continue as guest'),
+            ),
           ],
         ),
       ),

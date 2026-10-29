@@ -52,7 +52,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
     );
     _sendLocation();
     _gpsTimer = Timer.periodic(const Duration(seconds: 6), (_) {
-      if (_isOnline) _sendLocation();
+      if (_isOnline) _sendLocation(requestPermission: false);
     });
   }
 
@@ -100,12 +100,13 @@ class _DriverDashboardState extends State<DriverDashboard> {
     }
   }
 
-  Future<void> _sendLocation() async {
+  Future<void> _sendLocation({bool requestPermission = true}) async {
     if (!_isOnline || _locationBusy) return;
     _locationBusy = true;
     var gpsFixObtained = false;
     try {
       final pos = await getFreshLocation(
+        requestPermission: requestPermission,
         onPosition: (fix) {
           if (!mounted) return;
           setState(() {
@@ -478,6 +479,23 @@ class _DriverDashboardState extends State<DriverDashboard> {
                               size: 17,
                             ),
                           ),
+                        if (_isOnline)
+                          IconButton(
+                            tooltip: 'Retry or refresh GPS location',
+                            onPressed: _locationBusy
+                                ? null
+                                : () => _sendLocation(requestPermission: true),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                            icon: Icon(
+                              Icons.refresh,
+                              size: 18,
+                              color: _gpsAvailable ? Colors.green : Colors.orange,
+                            ),
+                          ),
                       ],
                     ),
                     if (_isOnline && _case != null)
@@ -606,7 +624,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                                     if (_isOnline)
                                       _gpsTimer = Timer.periodic(
                                         const Duration(seconds: 6),
-                                        (_) => _sendLocation(),
+                                        (_) => _sendLocation(requestPermission: false),
                                       );
                                   }
                                 });

@@ -56,7 +56,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // Changed from deep green to black
+      backgroundColor: const Color(0xFFF4F7F6),
       body: Center(
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -98,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 child: const Text(
                   'RapidCare',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF004D40),
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.5,
