@@ -95,6 +95,7 @@ td small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.id{color:v
   <div>
     <strong>Shared RapidCare records:</strong> Hospital details and map coordinates come from the central directory and are shared with the Hospital portal and Flutter app.
   </div>
+  <span id="db-sync" class="mono" style="font-size:11px;font-weight:700;color:#047857">Neon PostgreSQL · waiting for sync</span>
   <a href="/login" style="font-weight:700;color:#064e3b;text-decoration:none;font-size:12px">Staff Sign-In Portal &rarr;</a>
 </div>
 
@@ -267,6 +268,10 @@ function trackMe(){
 }
 const hActive=h=>h.active??!/not|inactive|offline/i.test(h.status||'');
 
+function markSync(){
+  const el=$('db-sync');
+  if(el)el.textContent='Neon PostgreSQL · synced '+new Date().toLocaleTimeString();
+}
 function render(){
   const st=S.stats,o=k=>st[k]??0,vals={h:o('active_hospitals'),a:o('ambulances_online'),i:o('total_icu_beds'),d:o('dispatches_in_transit')};
   Object.entries(vals).forEach(([k,v])=>$('st-'+k).textContent=v);
@@ -277,7 +282,7 @@ function render(){
   $('t-driver-requests').innerHTML=S.driverRequests.length?S.driverRequests.map(d=>`<tr><td class="id">#${d.id}</td><td><b>${esc(d.driver)}</b></td><td class="mono">${esc(d.phone||'')}</td><td class="mono">${esc(d.vehicle_number||'')}</td><td>${esc(d.license_number||'')}</td><td class="r"><button class="sm" onclick="reviewDriver(${d.id},'approved')">Approve</button> <button class="sm" onclick="reviewDriver(${d.id},'rejected')">Reject</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No driver registrations are waiting for review.</td></tr>';
 
   $('c-e').innerHTML=S.emerg.length?S.emerg.map(e=>`<div class="ord"><div class="row"><b>${esc(e.code||'#'+e.id)}</b><span class="crit">${esc(e.triage_level||e.status||'Active')}</span></div><p><b>Patient:</b> ${esc(e.patient_name||'Unknown')} · <b>Type:</b> ${esc(e.emergency_type||'-')}</p><p><b>Hospital:</b> ${esc(e.hospital||'-')} · <b>ETA:</b> ${esc(e.eta||'-')}</p></div>`).join(''):'<p class="empty">No unassigned emergencies at the moment. All dispatches are routed.</p>';
-  renderReviewQueue();drawTabs();drawMap();icons()
+  renderReviewQueue();drawTabs();drawMap();icons();markSync()
 }
 
 function renderReviewQueue(){

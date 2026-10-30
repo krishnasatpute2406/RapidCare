@@ -38,6 +38,7 @@ html.theme-dark .divide-y>:not([hidden])~:not([hidden]){border-color:#29485a!imp
     <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
     <span class="font-bold">Shared RapidCare records:</span>
     <span class="text-amber-800">Hospital details and location are synchronized with the Admin portal and Flutter app.</span>
+    <span id="db-sync" class="font-mono font-bold text-emerald-700">Neon PostgreSQL · waiting for sync</span>
   </div>
   <a href="/login?role=hospital" class="font-bold text-teal-800 hover:text-teal-950 underline flex items-center gap-1">
     <span>Staff Entry Portal</span>
@@ -305,6 +306,8 @@ async function poll(force) {
     if (force || (!busy && !saveT)) { H = s; renderState(); }
     renderEmerg(em);
     renderReviews(reviews);
+    const sync = $('db-sync');
+    if (sync) sync.textContent = 'Neon PostgreSQL · synced ' + new Date().toLocaleTimeString();
   } catch(e) {
     if (!e.auth) {
       console.error('Sync failed', e);
