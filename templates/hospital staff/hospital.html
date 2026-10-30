@@ -202,7 +202,7 @@ html.theme-dark .divide-y>:not([hidden])~:not([hidden]){border-color:#29485a!imp
 </div>
 
 <script>
-const API = location.port === '5000' || location.protocol !== 'file:' ? '' : 'http://127.0.0.1:5000',
+const API = location.protocol === 'file:' ? 'http://127.0.0.1:5000' : (location.port === '5000' ? '' : location.origin),
 TOKEN_KEY = 'rapidcare_hospital_token',
 EXPIRED = 'Hospital session expired. Please sign in again.',
 UNITS = {cardiac_unit:'Cardiac Unit',trauma_unit:'Trauma Unit',burn_unit:'Burn Unit',maternity_ot:'Maternity OT'},

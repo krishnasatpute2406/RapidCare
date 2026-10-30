@@ -170,7 +170,7 @@ td small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.id{color:v
 </div>
 
 <script>
-const API=location.port==='5000'?'':'http://127.0.0.1:5000',POLL_MS=5000,DEF=[19.1810,72.8510],TOKEN_KEY='rapidcare_admin_token',EXPIRED='Admin session expired. Please sign in again.';
+const API=location.protocol==='file:'?'http://127.0.0.1:5000':(location.port==='5000'?'':location.origin),POLL_MS=5000,DEF=[19.1810,72.8510],TOKEN_KEY='rapidcare_admin_token',EXPIRED='Admin session expired. Please sign in again.';
 let S={hosp:[],fleet:[],driverRequests:[],emerg:[],reviews:[],stats:{}},tab='overview',map,layer,meMarker,me=null,tiles,token=null;
 try{token=sessionStorage.getItem(TOKEN_KEY)}catch(e){}
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c])),icons=()=>window.lucide&&lucide.createIcons();
