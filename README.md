@@ -11,6 +11,29 @@ The repository contains two main parts:
 
 The backend exposes API routes for service health, user authentication, hospital information and ambulance requests. The mobile application is the user-facing part of the project.
 
+## Application screenshots
+
+These screenshots show the RapidCare mobile application running on an Android device. Precise location coordinates have been removed for privacy.
+
+<table>
+  <tr>
+    <th>Home screen</th>
+    <th>Emergency type selection</th>
+  </tr>
+  <tr>
+    <td><img src="screenshots/home-screen.jpg" alt="RapidCare home screen" width="300"></td>
+    <td><img src="screenshots/emergency-type.jpg" alt="RapidCare emergency type selection" width="300"></td>
+  </tr>
+  <tr>
+    <th>Recommended hospitals</th>
+    <th>Hospital directory</th>
+  </tr>
+  <tr>
+    <td><img src="screenshots/recommended-hospitals.jpg" alt="RapidCare recommended hospitals" width="300"></td>
+    <td><img src="screenshots/hospital-directory.jpg" alt="RapidCare hospital directory" width="300"></td>
+  </tr>
+</table>
+
 ## Technology
 
 | Area | Technology |
@@ -29,6 +52,7 @@ RapidCare/
 ├── rapidcare_app/       # Flutter mobile application
 ├── rapidcare_backend/   # Flask API and backend models
 ├── backend/             # Additional backend-related project files
+├── screenshots/         # Optimized application screenshots
 └── SRS/                 # Software Requirements Specification
 ```
 
